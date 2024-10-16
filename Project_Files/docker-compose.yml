@@ -109,7 +109,7 @@ services:
     volumes:
       - ./locust:/mnt/locust
       - ./logs:/mnt/logs
-    command: -f /mnt/locust/locustfile.py --headless -u ${NORMAL_USERS:-2} -r ${NORMAL_SPAWN_RATE:-1} --run-time ${RUN_TIME:-1h}
+    command: -f /mnt/locust/locustfile.py --headless -u ${NORMAL_USERS:-0} -r ${NORMAL_SPAWN_RATE:-1} --run-time ${RUN_TIME:-1h}
     environment:
       - LOCUST_HOST=http://web:5000
     depends_on:
@@ -124,7 +124,7 @@ services:
     volumes:
       - ./locust:/mnt/locust
       - ./logs:/mnt/logs
-    command: -f /mnt/locust/threat_locustfile.py --headless -u ${THREAT_USERS:-2} -r ${THREAT_SPAWN_RATE:-1} --run-time ${RUN_TIME:-1h}
+    command: -f /mnt/locust/threat_locustfile.py --headless
     environment:
       - LOCUST_HOST=http://web:5000
     depends_on:
