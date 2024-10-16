@@ -1,0 +1,43 @@
+# Logging configuration
+logging:
+  level: INFO
+  file: /mnt/logs/threat_responder.log
+  max_size: 10485760  # 10 MB
+  backup_count: 5
+
+# Response actions for different threat types
+response_actions:
+  sql_injection: "block_ip"
+  xss: "block_ip"
+  path_traversal: "log"
+  command_injection: "block_ip"
+  ddos: "block_ip"
+  potential_ddos: "rate_limit"
+  potential_brute_force: "rate_limit"
+
+# Redis configuration
+redis:
+  key_prefix: "threat_responder:"
+  blocked_ips_key: "blocked_ips"
+  expiration_time: 3600
+
+# Rate limiting configuration
+rate_limit:
+  window_size: 60
+  max_requests: 100
+
+elasticsearch:
+  host: elasticsearch
+  port: 9200
+
+# Index names
+indices:
+  threat: threat-logs
+
+# Processing settings
+processing:
+  batch_size: 100
+  poll_interval: 5
+  error_retry_interval: 30
+
+sync_interval: 300

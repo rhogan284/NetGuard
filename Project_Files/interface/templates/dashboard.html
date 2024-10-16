@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kibana Dashboard</title>
+</head>
+<body>
+    <h1>Kibana Dashboard</h1>
+
+    <form method="POST">
+        <label for="time_range">Time Range:</label>
+        <select id="time_range" name="time_range">
+            <option value="now-15m" {% if time_range == 'now-15m' %}selected{% endif %}>Last 15 minutes</option>
+            <option value="now-1h" {% if time_range == 'now-1h' %}selected{% endif %}>Last 1 hour</option>
+            <option value="now-24h" {% if time_range == 'now-24h' %}selected{% endif %}>Last 24 hours</option>
+        </select><br>
+
+        <label for="auto_refresh">Auto-Refresh Interval:</label>
+        <select id="auto_refresh" name="auto_refresh">
+            <option value="30s" {% if auto_refresh == '30s' %}selected{% endif %}>Every 30 seconds</option>
+            <option value="1m" {% if auto_refresh == '1m' %}selected{% endif %}>Every 1 minute</option>
+            <option value="5m" {% if auto_refresh == '5m' %}selected{% endif %}>Every 5 minutes</option>
+        </select><br>
+
+        <button type="submit">Update Dashboard</button>
+    </form>
+
+    <iframe src="{{ kibana_url }}" width="100%" height="600"></iframe>
+    <a href="{{ url_for('logout') }}">Logout</a>
+</body>
+</html>

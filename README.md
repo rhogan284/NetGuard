@@ -1,6 +1,6 @@
 # NetGuard
 
-NetGuard is a comprehensive e-commerce platform simulation with integrated logging, monitoring, and threat detection capabilities. It leverages the ELK (Elasticsearch, Logstash, Kibana) stack for log management and analysis, and includes both normal user traffic simulation and potential security threat simulations.
+NetGuard is a comprehensive e-commerce platform simulation with integrated logging, monitoring, threat detection, and automated response capabilities. It leverages the ELK (Elasticsearch, Logstash, Kibana) stack for log management and analysis, and includes both normal user traffic simulation and potential security threat simulations.
 
 ## Project Structure
 
@@ -17,8 +17,11 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
 ├── threat_detector/
 │   ├── config.yaml
 │   ├── Dockerfile
+│   ├── Dockerfile.responder
 │   ├── requirements.txt
-│   └── threat_detector.py
+│   ├── responder_config.yaml
+│   ├── threat_detector.py
+│   └── threat_responder.py
 ├── web/
 │   ├── app.py
 │   ├── Dockerfile
@@ -30,12 +33,14 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
 
 1. **Web Application**: A Flask-based e-commerce API simulating basic operations.
 2. **Database**: PostgreSQL database storing product information.
-3. **Load Testing**: Two Locust instances simulating normal user traffic and potential security threats.
-4. **ELK Stack**: 
+3. **Redis**: Used for caching and managing blocked IP addresses.
+4. **Load Testing**: Two Locust instances simulating normal user traffic and potential security threats.
+5. **ELK Stack**: 
    - Elasticsearch for storing and indexing logs
    - Logstash for log processing and ingestion
    - Kibana for log visualization and analysis
-5. **Threat Detector**: A Python-based service that analyzes logs in real-time to detect potential security threats.
+6. **Threat Detector**: A Python-based service that analyzes logs in real-time to detect potential security threats.
+7. **Threat Responder**: A Python-based service that automatically responds to detected threats.
 
 ## Setup and Running
 
@@ -49,13 +54,14 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
 
 3. Start the services:
    ```
+   docker compose up --build
    ```
 
 4. Access the components:
    - Web API: http://localhost:5002
    - Kibana: http://localhost:5601
    - Locust (normal traffic): http://localhost:8089
-   - Locust (threat simulation): http://localhost:8090
+   - Locust (threat simulation): Running in headless mode
 
 ## Usage
 
@@ -63,16 +69,33 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
    - The Flask app provides basic e-commerce endpoints like product listing, cart management, and checkout.
 
 2. **Load Testing**:
-   - Use the Locust web interfaces to start and manage load tests.
-   - Normal traffic simulation: http://localhost:8089
-   - Threat simulation: http://localhost:8090
+   - Normal traffic simulation: Use the Locust web interface at http://localhost:8089 to start and manage load tests.
+   - Threat simulation: This runs automatically in headless mode, simulating various types of attacks.
 
 3. **Log Analysis**:
    - Access Kibana at http://localhost:5601
-   - Set up index patterns for "locust-logs-*"
+   - Set up index patterns for "locust-logs-*", "threat-logs", and "normal-logs"
    - Create visualizations and dashboards to analyze the simulated traffic and potential security threats
 
 4. **Threat Detection**:
    - The threat detector service continuously analyzes logs from Elasticsearch
    - Detected threats are logged to `/mnt/logs/detected_threats.log` and indexed in Elasticsearch
    - Configure detection rules and thresholds in `threat_detector/config.yaml`
+
+5. **Threat Response**:
+   - The threat responder service automatically takes action based on detected threats
+   - Actions include blocking IPs, rate limiting, and logging
+   - Configure response actions in `threat_detector/responder_config.yaml`
+
+## Monitoring and Logging
+
+- All logs are centralized in Elasticsearch
+- Kibana provides real-time visualizations and dashboards
+- The Threat Detector continuously monitors for suspicious activities
+- The Threat Responder takes automated actions to mitigate detected threats
+
+## Customization
+
+- Modify `threat_detector/config.yaml` to adjust threat detection rules and thresholds
+- Update `threat_detector/responder_config.yaml` to customize automated response actions
+- Edit `locust/threat_locustfile.py` to simulate different types of attacks

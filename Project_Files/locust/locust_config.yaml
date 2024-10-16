@@ -1,0 +1,28 @@
+# General settings
+host: http://web:5000
+run_time: 1h
+
+# Normal users settings
+normal_users:
+  count: 10
+  spawn_rate: 1
+  wait_time_min: 1
+  wait_time_max: 5
+
+# Threat users settings
+threat_users:
+  count: 10
+  spawn_rate: 1
+  wait_time_min: 1
+  wait_time_max: 10
+
+# User lifecycle management
+lifecycle:
+  check_interval: 5  # seconds
+  deactivation_chance: 0.1
+  activation_chance: 0.3
+  min_cooldown: 10  # seconds
+  max_cooldown: 30  # seconds
+
+# Logging
+log_dir: /mnt/logs

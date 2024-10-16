@@ -1,13 +1,4 @@
 services:
-  web:
-    build: ./web
-    ports:
-      - "5002:5000"
-    depends_on:
-      - db
-    environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/ecommerce
-
   db:
     image: postgres:13
     environment:
@@ -16,6 +7,13 @@ services:
       - POSTGRES_DB=ecommerce
     volumes:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d ecommerce"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   elasticsearch:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
@@ -24,6 +22,8 @@ services:
       - logger.level=WARN
     ports:
       - "9200:9200"
+    networks:
+      - app-network
     healthcheck:
       test: [ "CMD-SHELL", "curl -s http://localhost:9200 >/dev/null || exit 1" ]
       interval: 30s
@@ -40,6 +40,8 @@ services:
       - elasticsearch
     ports:
       - "5044:5044"
+    networks:
+      - app-network
 
   kibana:
     image: docker.elastic.co/kibana/kibana:7.14.0
@@ -50,28 +52,8 @@ services:
       - "5601:5601"
     depends_on:
       - elasticsearch
-
-  locust:
-    image: locustio/locust
-    ports:
-      - "8089:8089"
-    volumes:
-      - ./locust:/mnt/locust
-      - ./logs:/mnt/logs
-    command: -f /mnt/locust/locustfile.py --host http://web:5000 --logfile /mnt/logs/locust.log --loglevel INFO
-    depends_on:
-      - web
-
-  threat-locust:
-    image: locustio/locust
-    ports:
-      - "8090:8089"
-    volumes:
-      - ./locust:/mnt/locust
-      - ./logs:/mnt/logs
-    command: -f /mnt/locust/threat_locustfile.py --host http://web:5000 --logfile /mnt/logs/threat_locust.log --loglevel INFO
-    depends_on:
-      - web
+    networks:
+      - app-network
 
   threat-detector:
     build: ./threat_detector
@@ -84,6 +66,90 @@ services:
     volumes:
       - ./logs:/mnt/logs
     restart: unless-stopped
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7.4-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+
+  web:
+    build: ./web
+    ports:
+      - "5002:5000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/ecommerce
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_KEY_PREFIX="threat_responder:"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  locust:
+    build:
+      context: ./locust
+      dockerfile: Dockerfile.locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./locust:/mnt/locust
+      - ./logs:/mnt/logs
+    command: -f /mnt/locust/locustfile.py --headless -u ${NORMAL_USERS:-10} -r ${NORMAL_SPAWN_RATE:-1} --run-time ${RUN_TIME:-1h}
+    environment:
+      - LOCUST_HOST=http://web:5000
+    depends_on:
+      - web
+    networks:
+      - app-network
+
+  threat-locust:
+    build:
+      context: ./locust
+      dockerfile: Dockerfile.locust
+    volumes:
+      - ./locust:/mnt/locust
+      - ./logs:/mnt/logs
+    command: -f /mnt/locust/threat_locustfile.py --headless -u ${THREAT_USERS:-10} -r ${THREAT_SPAWN_RATE:-1} --run-time ${RUN_TIME:-1h}
+    environment:
+      - LOCUST_HOST=http://web:5000
+    depends_on:
+      - web
+    networks:
+      - app-network
+
+  threat-responder:
+    build:
+      context: ./threat_detector
+      dockerfile: Dockerfile.responder
+    volumes:
+      - ./logs:/mnt/logs
+      - ./threat_detector/responder_config.yaml:/app/responder_config.yaml
+    depends_on:
+      - threat-detector
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_KEY_PREFIX="threat_responder:"
+    networks:
+      - app-network
+    restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
 
 volumes:
   logs:

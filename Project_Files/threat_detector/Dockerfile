@@ -5,8 +5,6 @@ RUN pip install -r requirements.txt
 COPY threat_detector.py .
 COPY config.yaml /app/config.yaml
 
-# Create the logs directory
 RUN mkdir -p /mnt/logs && chmod 777 /mnt/logs
-
 
 CMD ["python", "threat_detector.py"]
