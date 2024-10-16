@@ -15,6 +15,27 @@ threat_users:
   spawn_rate: 1
   wait_time_min: 1
   wait_time_max: 10
+  sql_injection:
+    enabled: true
+    weight: 3
+  xss:
+    enabled: true
+    weight: 3
+  path_traversal:
+    enabled: true
+    weight: 2
+  command_injection:
+    enabled: true
+    weight: 2
+  brute_force:
+    enabled: false
+    weight: 2
+  web_scraping:
+    enabled: false
+    weight: 2
+  ddos:
+    enabled: false
+    weight: 2
 
 # User lifecycle management
 lifecycle:

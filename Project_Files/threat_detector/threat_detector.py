@@ -7,7 +7,7 @@ import logging
 import yaml
 import time
 import uuid
-from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch, helpers
 from elasticsearch.helpers import bulk
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -30,31 +30,21 @@ class ThreatDetector:
         self.es = self.connect_to_elasticsearch()
         self.compiled_rules = self.compile_rules()
         self.request_timestamps = defaultdict(lambda: deque(maxlen=self.config['ddos']['max_requests']))
-        self.last_processed_timestamp = self.get_last_processed_timestamp()
+        self.last_processed_timestamp = datetime.now(timezone.utc)
 
     @staticmethod
     def load_config(config_path):
         with open(config_path, 'r') as f:
             return yaml.safe_load(f)
 
-    def connect_to_elasticsearch(self):
+    @staticmethod
+    def connect_to_elasticsearch():
         es_host = os.environ.get('ELASTICSEARCH_HOST', 'elasticsearch')
         es_port = os.environ.get('ELASTICSEARCH_PORT', '9200')
         es = Elasticsearch([f"http://{es_host}:{es_port}"])
         es.info()
         logger.info("Successfully connected to Elasticsearch")
         return es
-
-    def get_last_processed_timestamp(self):
-        try:
-            with open('/mnt/logs/last_processed_timestamp.txt', 'r') as f:
-                return datetime.fromisoformat(f.read().strip())
-        except FileNotFoundError:
-            return datetime.now(timezone.utc) - timedelta(minutes=5)
-
-    def save_last_processed_timestamp(self, timestamp):
-        with open('/mnt/logs/last_processed_timestamp.txt', 'w') as f:
-            f.write(timestamp.isoformat())
 
     def compile_rules(self):
         return {
@@ -99,89 +89,49 @@ class ThreatDetector:
 
         return list(threats)
 
-    def reorder_log_fields(self, log_entry):
-        ordered_log = {}
-        for field in self.config['field_order']:
-            if field in log_entry:
-                ordered_log[field] = log_entry[field]
-            elif field == "log_id":
-                ordered_log[field] = str(uuid.uuid4())
-            elif field == "threat_type":
-                ordered_log[field] = log_entry.get("type", "unknown")
-
-        for key, value in log_entry.items():
-            if key not in ordered_log:
-                ordered_log[key] = value
-
-        return ordered_log
-
-    def process_logs_batch(self, logs):
-        actions = []
-        for log in logs:
-            threats = self.detect_threats(log['_source'])
-            reordered_log = self.reorder_log_fields(log['_source'])
-            if threats:
-                reordered_log['detected_threats'] = threats
-                actions.append({
-                    "_index": self.config['indices']['threat'],
-                    "_source": reordered_log
-                })
-                threat_message = f"Threat detected: {threats} in log: {reordered_log.get('url', 'N/A')} from IP: {reordered_log.get('client_ip', 'N/A')}"
-                logging.warning(threat_message)
-                threat_logger.warning(json.dumps(reordered_log))
-            else:
-                actions.append({
-                    "_index": self.config['indices']['normal'],
-                    "_source": reordered_log
-                })
-                logging.info(
-                    f"Normal log processed: {reordered_log.get('url', 'N/A')} from IP: {reordered_log.get('client_ip', 'N/A')}")
-
-        if actions:
-            try:
-                success, failed = bulk(self.es, actions)
-                logger.info(f"Indexed {success} logs. Failed: {len(failed)}")
-            except Exception as e:
-                logger.error(f"Error during bulk indexing: {str(e)}")
-
-    def get_new_logs(self):
-        query = {
-            "bool": {
-                "must": [
-                    {
-                        "range": {
-                            "@timestamp": {
-                                "gt": self.last_processed_timestamp.isoformat()
-                            }
+    def process_logs_stream(self):
+        while True:
+            query = {
+                "query": {
+                    "range": {
+                        "@timestamp": {
+                            "gt": self.last_processed_timestamp.isoformat()
                         }
                     }
+                },
+                "sort": [
+                    {"@timestamp": "asc"}
                 ]
             }
-        }
 
-        result = self.es.search(index=self.config['indices']['source'], query=query, sort=[{"@timestamp": "asc"}],
-                                size=self.config['processing']['batch_size'])
-        logging.info(f"Retrieved {len(result['hits']['hits'])} new logs from Elasticsearch")
-        return result['hits']['hits']
+            logger.info(f"Querying for logs after {self.last_processed_timestamp.isoformat()}")
+
+            for log in helpers.scan(self.es, query=query, index=self.config['indices']['source']):
+                log_entry = log['_source']
+                log_timestamp = datetime.fromisoformat(log_entry['@timestamp'].replace('Z', '+00:00'))
+
+                if log_timestamp > self.last_processed_timestamp:
+                    threats = self.detect_threats(log_entry)
+                    if threats:
+                        self.process_threat(log_entry, threats)
+                    else:
+                        self.process_normal_log(log_entry)
+
+                    self.last_processed_timestamp = log_timestamp
+
+            logger.info(f"Processed logs up to {self.last_processed_timestamp.isoformat()}")
+            time.sleep(self.config['processing']['poll_interval'])
+
+    def process_threat(self, log_entry, threats):
+        log_entry['detected_threats'] = threats
+        self.es.index(index=self.config['indices']['threat'], body=log_entry)
+
+    def process_normal_log(self, log_entry):
+        self.es.index(index=self.config['indices']['normal'], body=log_entry)
 
     def run(self):
-        while True:
-            try:
-                logs = self.get_new_logs()
-                if logs:
-                    self.process_logs_batch(logs)
-                    last_log = logs[-1]['_source']
-                    self.last_processed_timestamp = datetime.fromisoformat(last_log['@timestamp'].replace('Z', '+00:00'))
-                    self.save_last_processed_timestamp(self.last_processed_timestamp)
-                    logger.info(f"Processed {len(logs)} logs. Last processed timestamp: {self.last_processed_timestamp.isoformat()}")
-                else:
-                    logger.info("No new logs to process.")
-                time.sleep(self.config['processing']['poll_interval'])
-            except Exception as e:
-                logger.error(f"An error occurred: {str(e)}")
-                logger.info("Attempting to reconnect to Elasticsearch...")
-                self.es = self.connect_to_elasticsearch()
-                time.sleep(self.config['processing']['error_retry_interval'])
+        logger.info(f"Starting threat detector. Processing logs from {self.last_processed_timestamp.isoformat()}")
+        self.process_logs_stream()
 
 
 if __name__ == "__main__":

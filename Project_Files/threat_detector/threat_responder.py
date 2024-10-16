@@ -2,10 +2,9 @@ import json
 import logging
 import yaml
 import time
+from datetime import datetime, timedelta, timezone
+from elasticsearch import Elasticsearch, helpers
 import redis
-import os
-from datetime import datetime, timedelta
-from elasticsearch import Elasticsearch
 import sys
 
 logging.basicConfig(level=logging.INFO,
@@ -22,8 +21,8 @@ class ThreatResponder:
         self.config = self.load_config(config_path)
         self.es = self.connect_to_elasticsearch()
         self.redis = self.connect_to_redis()
-        self.last_processed_timestamp = self.get_last_processed_timestamp()
         self.BLOCKED_IPS_KEY = f"{self.config['redis']['key_prefix']}blocked_ips"
+        self.last_processed_timestamp = datetime.now(timezone.utc)
 
     @staticmethod
     def load_config(config_path):
@@ -34,86 +33,65 @@ class ThreatResponder:
         return config
 
     def connect_to_elasticsearch(self):
-        es_host = os.environ.get('ELASTICSEARCH_HOST', 'elasticsearch')
-        es_port = os.environ.get('ELASTICSEARCH_PORT', '9200')
+        es_host = self.config['elasticsearch']['host']
+        es_port = self.config['elasticsearch']['port']
         es = Elasticsearch([f"http://{es_host}:{es_port}"])
         es.info()
         logger.info("Successfully connected to Elasticsearch")
         return es
 
     def connect_to_redis(self):
-        redis_url = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
+        redis_url = self.config['redis']['url']
         logger.info(f"Connecting to Redis at {redis_url}")
         return redis.Redis.from_url(redis_url, decode_responses=True)
 
-    def get_last_processed_timestamp(self):
-        try:
-            timestamp = self.redis.get('last_processed_timestamp')
-            if timestamp:
-                return datetime.fromisoformat(timestamp)
-        except Exception as e:
-            logger.error(f"Error getting last processed timestamp: {str(e)}")
-
-        return datetime.utcnow() - timedelta(minutes=5)
-
-    def save_last_processed_timestamp(self, timestamp):
-        try:
-            self.redis.set('last_processed_timestamp', timestamp.isoformat())
-        except Exception as e:
-            logger.error(f"Error saving last processed timestamp: {str(e)}")
-
-    def get_new_threats(self):
-        query = {
-            "bool": {
-                "must": [
-                    {
-                        "range": {
-                            "@timestamp": {
-                                "gt": self.last_processed_timestamp.isoformat()
-                            }
+    def process_threats_stream(self):
+        while True:
+            query = {
+                "query": {
+                    "range": {
+                        "@timestamp": {
+                            "gt": self.last_processed_timestamp.isoformat()
                         }
                     }
+                },
+                "sort": [
+                    {"@timestamp": "asc"}
                 ]
             }
-        }
 
-        logger.info(f"Querying Elasticsearch for threats after {self.last_processed_timestamp.isoformat()}")
-        logger.debug(f"Query: {json.dumps(query)}")
+            logger.info(f"Querying for threats after {self.last_processed_timestamp.isoformat()}")
 
-        result = self.es.search(
-            index=self.config['indices']['threat'],
-            query=query,
-            sort=[{"@timestamp": "asc"}],
-            size=self.config['processing']['batch_size']
-        )
+            for threat in helpers.scan(self.es, query=query, index=self.config['indices']['threat']):
+                threat_entry = threat['_source']
+                threat_timestamp = datetime.fromisoformat(threat_entry['@timestamp'].replace('Z', '+00:00'))
 
-        threats = result['hits']['hits']
-        logger.info(f"Retrieved {len(threats)} threats from Elasticsearch")
+                if threat_timestamp > self.last_processed_timestamp:
+                    self.execute_response(threat_entry.get('detected_threats', []), threat_entry)
+                    self.last_processed_timestamp = threat_timestamp
 
-        if threats:
-            logger.info(f"First threat timestamp: {threats[0]['_source']['@timestamp']}")
-            logger.info(f"Last threat timestamp: {threats[-1]['_source']['@timestamp']}")
+            logger.info(f"Processed threats up to {self.last_processed_timestamp.isoformat()}")
+            time.sleep(self.config['processing']['poll_interval'])
 
-        return threats
+    def execute_response(self, detected_threats, threat_entry):
+        logger.info(f"Executing response for threats: {detected_threats}")
+        client_ip = threat_entry.get('client_ip', 'unknown')
 
-    def execute_response(self, threat_type, log_entry):
-        logger.info(f"Executing response for threat type: {threat_type}")
-        if threat_type in self.config['response_actions']:
-            action = self.config['response_actions'][threat_type]
-            logger.info(f"Action for {threat_type}: {action}")
+        for threat_type in detected_threats:
+            if threat_type in self.config['response_actions']:
+                action = self.config['response_actions'][threat_type]
+                logger.info(f"Action for {threat_type}: {action}")
 
-            client_ip = log_entry.get('client_ip', 'unknown')
-
-            if action == "block_ip":
-                self.block_ip(client_ip)
-            elif action == "rate_limit":
-                self.rate_limit_ip(client_ip)
-            elif action == "log":
-                self.log_threat(threat_type, client_ip)
+                if action == "block_ip":
+                    self.block_ip(client_ip)
+                elif action == "rate_limit":
+                    self.rate_limit_ip(client_ip)
+                elif action == "log":
+                    self.log_threat(threat_type, client_ip)
+                else:
+                    logger.warning(f"Unknown action type for threat: {threat_type}")
             else:
-                logger.warning(f"Unknown action type for threat: {threat_type}")
-        else:
-            logger.warning(f"No response action defined for threat type: {threat_type}")
+                logger.warning(f"No response action defined for threat type: {threat_type}")
 
     def block_ip(self, ip):
         try:
@@ -129,10 +107,10 @@ class ThreatResponder:
     def rate_limit_ip(self, ip):
         logger.info(f"Rate limiting IP: {ip}")
         key = f"{self.config['redis']['key_prefix']}rate:{ip}"
-        current = self.redis.get(key)
-        if current is None:
+        current = int(self.redis.get(key) or 0)
+        if current == 0:
             self.redis.set(key, 1, ex=self.config['rate_limit']['window_size'])
-        elif int(current) < self.config['rate_limit']['max_requests']:
+        elif current < self.config['rate_limit']['max_requests']:
             self.redis.incr(key)
         else:
             self.block_ip(ip)
@@ -142,76 +120,17 @@ class ThreatResponder:
         logger.info(f"Logging threat: {threat_type} from IP: {ip}")
         with open(self.config['logging']['file'], "a") as f:
             f.write(f"{datetime.now().isoformat()},{threat_type},{ip}\n")
-        logger.info(f"Logged {threat_type} threat from IP: {ip}")
-
-    def process_threats(self, threats):
-        for threat in threats:
-            log_entry = threat['_source']
-            detected_threats = log_entry.get('detected_threats', [])
-            client_ip = log_entry.get('client_ip')
-            if client_ip and detected_threats:
-                self.block_ip(client_ip)
-
-        if threats:
-            last_threat = threats[-1]['_source']
-            self.last_processed_timestamp = datetime.fromisoformat(last_threat['@timestamp'].replace('Z', '+00:00'))
-            self.save_last_processed_timestamp(self.last_processed_timestamp)
 
     def run(self):
-        sync_interval = self.config.get('sync_interval', 300)  # Default to 5 minutes
-        last_sync_time = time.time()
-
+        logger.info(f"Starting threat responder. Processing threats from {self.last_processed_timestamp.isoformat()}")
         while True:
             try:
-                current_time = time.time()
-                if current_time - last_sync_time > sync_interval:
-                    self.sync_last_processed_timestamp()
-                    last_sync_time = current_time
-
-                threats = self.get_new_threats()
-                if threats:
-                    self.process_threats(threats)
-                    logger.info(
-                        f"Processed {len(threats)} threats. Last processed timestamp: {self.last_processed_timestamp.isoformat()}")
-                else:
-                    logger.info("No new threats to process.")
-                time.sleep(self.config['processing']['poll_interval'])
+                self.process_threats_stream()
             except Exception as e:
                 logger.error(f"An error occurred: {str(e)}")
                 logger.info("Attempting to reconnect to Elasticsearch...")
                 self.es = self.connect_to_elasticsearch()
                 time.sleep(self.config['processing']['error_retry_interval'])
-
-    def sync_last_processed_timestamp(self):
-        query = {
-            "bool": {
-                "must": [
-                    {
-                        "range": {
-                            "@timestamp": {
-                                "lte": datetime.utcnow().isoformat()
-                            }
-                        }
-                    }
-                ]
-            }
-        }
-
-        result = self.es.search(
-            index=self.config['indices']['threat'],
-            query=query,
-            sort=[{"@timestamp": "desc"}],
-            size=1
-        )
-
-        if result['hits']['hits']:
-            latest_timestamp = datetime.fromisoformat(
-                result['hits']['hits'][0]['_source']['@timestamp'].replace('Z', '+00:00'))
-            self.last_processed_timestamp = latest_timestamp
-            self.save_last_processed_timestamp(latest_timestamp)
-            logger.info(f"Synced last processed timestamp to {latest_timestamp.isoformat()}")
-        else:
-            logger.warning("No threats found in Elasticsearch during sync")
 
 
 if __name__ == "__main__":

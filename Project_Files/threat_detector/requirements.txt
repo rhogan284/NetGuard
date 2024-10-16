@@ -2,4 +2,3 @@ elasticsearch==8.9.0
 PyYAML==6.0.2
 watchdog==3.0.0
 redis==5.0.1
-

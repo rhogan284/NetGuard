@@ -17,6 +17,7 @@ response_actions:
 
 # Redis configuration
 redis:
+  url: redis://redis:6379/0
   key_prefix: "threat_responder:"
   blocked_ips_key: "blocked_ips"
   expiration_time: 3600
