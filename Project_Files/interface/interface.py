@@ -54,4 +54,4 @@ def internal_error(error):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(port=6000, debug=True)
