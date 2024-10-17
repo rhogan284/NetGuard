@@ -25,6 +25,7 @@ with open(logging_config_path, 'rt') as f:
 json_logger = logging.getLogger('json_logger')
 user_stats_logger = logging.getLogger('threat_user_stats')
 
+
 class UserManager:
     def __init__(self):
         self.users = {}
@@ -45,7 +46,9 @@ class UserManager:
                 stats[user.__class__]['active'] += 1
         return stats
 
+
 user_manager = UserManager()
+
 
 class DynamicMaliciousUser(HttpUser):
     wait_time = between(config['threat_users']['wait_time_min'], config['threat_users']['wait_time_max'])
@@ -95,56 +98,47 @@ class DynamicMaliciousUser(HttpUser):
     def on_stop(self):
         user_manager.remove_user(self)
 
-    def on_stop(self):
-        self.__class__.instances.remove(self)
+    @staticmethod
+    def load_payloads(filename):
+        try:
+            with open(f'/mnt/locust/payloads/{filename}', 'r') as file:
+                return [line.strip() for line in file if line.strip()]
+        except FileNotFoundError:
+            logging.error(f"Payload file not found: {filename}")
+            return []
 
-    
     @task(2)
-    def sql_injection_attempt(self)
-     if not self.is_active:
-        return
-    # Read payloads from an external file
-    with open('SQL.txt', 'r') as file:
-        payloads = [line.strip() for line in file.readlines()]
-    payload = random.choice(payloads)
-    self._log_request("GET", f"/products?id={payload}", None, "sql_injection")
+    def sql_injection_attempt(self):
+        if not self.is_active:
+            return
+        payloads = self.load_payloads('SQL.txt')
+        if not payloads:
+            return
+        payload = random.choice(payloads)
+        self._log_request("GET", f"/products?id={payload}", None, "sql_injection")
 
     @task(2)
     def xss_attempt(self):
         if not self.is_active:
             return
         payload_files = ['stored_xss.txt', 'reflected_xss.txt', 'dom_xss.txt']
-
         selected_file = secrets.choice(payload_files)
-
-        try:
-            # Load payloads from the selected text file
-            with open(selected_file, 'r') as file:
-                payloads = [line.strip() for line in file if line.strip()]
-        except Exception as e:
-            # Handle exceptions (e.g., file not found)
-            print(f"Error loading payloads from {selected_file}: {e}")
+        payloads = self.load_payloads(selected_file)
+        if not payloads:
             return
-        payload = secrets.choice(payloads)
 
+        payload = secrets.choice(payloads)
         encoded_payload = urllib.parse.quote(payload)
 
-        # Adjust the request based on the selected attack type
         if selected_file == 'stored_xss.txt':
             data = {"comment": payload}
             self._log_request("POST", "/submit_comment", data, "xss_stored")
-
         elif selected_file == 'reflected_xss.txt':
             url = f"/search?q={encoded_payload}"
             self._log_request("GET", url, None, "xss_reflected")
-
         elif selected_file == 'dom_xss.txt':
             url = f"/page#payload={encoded_payload}"
             self._log_request("GET", url, None, "xss_dom")
-
-        else:
-            print(f"Unknown payload file selected: {selected_file}")
-            return
 
     @task(2)
     def brute_force_login(self):
@@ -336,6 +330,7 @@ class DynamicMaliciousUser(HttpUser):
         }
         json_logger.info(json.dumps(log_entry))
 
+
 enabled_user_classes = []
 
 if config['threat_users'].get('sql_injection', {}).get('enabled', False):
@@ -412,6 +407,7 @@ def manage_user_lifecycle(environment):
                 user.last_active_time = current_time
                 logging.info(f"User {user.user_id} activated")
 
+
 def log_user_stats():
     stats = user_manager.get_stats()
     log_message = "Threat User Statistics: " + ", ".join([
@@ -421,6 +417,7 @@ def log_user_stats():
         for cls, data in stats.items()
     ])
     user_stats_logger.info(log_message)
+
 
 class CustomLoadShape(LoadTestShape):
     def __init__(self):
@@ -447,11 +444,13 @@ class CustomLoadShape(LoadTestShape):
 
         return current_users + self.spawn_rate, self.spawn_rate
 
+
 def periodic_tasks(environment):
     while True:
         manage_user_lifecycle(environment)
         log_user_stats()
         gevent.sleep(5)  # Log every 5 seconds
+
 
 @events.init.add_listener
 def on_locust_init(environment, **kwargs):
