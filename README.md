@@ -8,15 +8,24 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
 .
 ├── db/
 │   └── init.sql
+├── interface/
+│   ├── templates/
+│   │   ├── dashboard.html
+│   │   ├── error.html
+│   │   └── login.html
+│   └── interface.py
 ├── locust/
+│   ├── Dockerfile.locust
+│   ├── locust_config.yaml
 │   ├── locustfile.py
+│   ├── logging_config.yaml
 │   └── threat_locustfile.py
 ├── logstash/
 │   ├── logstash.conf
 │   └── logstash.yaml
 ├── threat_detector/
-│   ├── config.yaml
-│   ├── Dockerfile
+│   ├── detector_config.yaml
+│   ├── Dockerfile.detector
 │   ├── Dockerfile.responder
 │   ├── requirements.txt
 │   ├── responder_config.yaml
@@ -41,6 +50,7 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
    - Kibana for log visualization and analysis
 6. **Threat Detector**: A Python-based service that analyzes logs in real-time to detect potential security threats.
 7. **Threat Responder**: A Python-based service that automatically responds to detected threats.
+8. **Interface**: A Flask-based web interface for viewing the Kibana dashboard and managing the system.
 
 ## Setup and Running
 
@@ -62,6 +72,7 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
    - Kibana: http://localhost:5601
    - Locust (normal traffic): http://localhost:8089
    - Locust (threat simulation): Running in headless mode
+   - Interface: http://localhost:5000 (assuming the interface runs on port 5000)
 
 ## Usage
 
@@ -80,12 +91,17 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
 4. **Threat Detection**:
    - The threat detector service continuously analyzes logs from Elasticsearch
    - Detected threats are logged to `/mnt/logs/detected_threats.log` and indexed in Elasticsearch
-   - Configure detection rules and thresholds in `threat_detector/config.yaml`
+   - Configure detection rules and thresholds in `threat_detector/detector_config.yaml`
 
 5. **Threat Response**:
    - The threat responder service automatically takes action based on detected threats
    - Actions include blocking IPs, rate limiting, and logging
    - Configure response actions in `threat_detector/responder_config.yaml`
+
+6. **Interface**:
+   - Access the web interface at http://localhost:5000
+   - Log in using the credentials specified in the `interface.py` file
+   - View the Kibana dashboard and manage system settings
 
 ## Monitoring and Logging
 
@@ -93,9 +109,11 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
 - Kibana provides real-time visualizations and dashboards
 - The Threat Detector continuously monitors for suspicious activities
 - The Threat Responder takes automated actions to mitigate detected threats
+- The Interface provides a user-friendly way to view and manage the system
 
-## Customization
+## Customisation
 
-- Modify `threat_detector/config.yaml` to adjust threat detection rules and thresholds
+- Modify `threat_detector/detector_config.yaml` to adjust threat detection rules and thresholds
 - Update `threat_detector/responder_config.yaml` to customize automated response actions
 - Edit `locust/threat_locustfile.py` to simulate different types of attacks
+- Customize the interface by modifying the templates in `interface/templates/`
