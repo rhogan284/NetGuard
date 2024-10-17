@@ -1,0 +1,55 @@
+version: 1
+disable_existing_loggers: False
+formatters:
+  simple:
+    format: "%(asctime)s - %(message)s"
+  json:
+    format: "%(message)s"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: simple
+    stream: ext://sys.stdout
+
+  json_file:
+    class: logging.FileHandler
+    level: INFO
+    formatter: json
+    filename: /mnt/logs/locust_json.log
+    encoding: utf8
+
+  normal_user_stats:
+    class: logging.FileHandler
+    level: INFO
+    formatter: simple
+    filename: /mnt/logs/normal_user_stats.log
+    encoding: utf8
+
+  threat_user_stats:
+    class: logging.FileHandler
+    level: INFO
+    formatter: simple
+    filename: /mnt/logs/threat_user_stats.log
+    encoding: utf8
+
+loggers:
+  json_logger:
+    level: INFO
+    handlers: [json_file]
+    propagate: False
+
+  normal_user_stats:
+    level: INFO
+    handlers: [normal_user_stats]
+    propagate: False
+
+  threat_user_stats:
+    level: INFO
+    handlers: [threat_user_stats]
+    propagate: False
+
+root:
+  level: INFO
+  handlers: [console]

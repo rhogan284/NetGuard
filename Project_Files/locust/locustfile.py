@@ -3,20 +3,39 @@ import json
 import logging
 import time
 import uuid
-from locust import HttpUser, task, between
+import os
+from locust import HttpUser, task, between, events
 from locust.contrib.fasthttp import FastHttpUser
 from datetime import datetime
+import gevent
+import yaml
+
+config_path = "/mnt/locust/locust_config.yaml"
+with open(config_path, "r") as config_file:
+    config = yaml.safe_load(config_file)
+
+logging_config_path = "/mnt/locust/logging_config.yaml"
+with open(logging_config_path, 'rt') as f:
+    logging_config = yaml.safe_load(f.read())
+    logging.config.dictConfig(logging_config)
 
 json_logger = logging.getLogger('json_logger')
-json_logger.setLevel(logging.INFO)
-json_handler = logging.FileHandler('/mnt/logs/locust_json.log')
-json_handler.setFormatter(logging.Formatter('%(message)s'))
-json_logger.addHandler(json_handler)
+user_stats_logger = logging.getLogger('normal_user_stats')
 
-class WebsiteUser(FastHttpUser):
-    wait_time = between(1, 5)
+class DynamicWebsiteUser(FastHttpUser):
+    wait_time = between(config['normal_users']['wait_time_min'], config['normal_users']['wait_time_max'])
+    host = config['host']
+    instances = []
 
-    def on_start(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__class__.instances.append(self)
+        self.is_active = False
+        self.last_active_time = time.time()
+        self.activation_cooldown = random.uniform(config['lifecycle']['min_cooldown'], config['lifecycle']['max_cooldown'])
+        self.randomise_user()
+
+    def randomise_user(self):
         self.user_id = str(uuid.uuid4())
         self.session_id = str(uuid.uuid4())
         self.client_ip = f"{random.randint(1, 223)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
@@ -28,10 +47,10 @@ class WebsiteUser(FastHttpUser):
             'donaldtrump'
         ])
         self.password = random.choice([
-            'password', 
-            '123456', 
-            'admin', 
-            'qwerty', 
+            'password',
+            '123456',
+            'admin',
+            'qwerty',
             'letmein'
         ])
         self.user_agent = random.choice([
@@ -49,31 +68,58 @@ class WebsiteUser(FastHttpUser):
             {"country": "Germany", "city": "Berlin", "timezone": "Europe/Berlin"}
         ])
 
+    def on_start(self):
+        self.is_active = True
+        self.last_active_time = time.time()
+
+    def on_stop(self):
+        self.__class__.instances.remove(self)
+
     @task(10)
     def index_page(self):
+        if not self.is_active:
+            return
         self._log_request("GET", "/", None)
 
     @task(5)
     def view_product(self):
+        if not self.is_active:
+            return
         product_id = random.randint(1, 10)
         self._log_request("GET", f"/products/{product_id}", None)
 
     @task(2)
     def add_to_cart(self):
+        if not self.is_active:
+            return
         product_id = random.randint(1, 10)
         self._log_request("POST", "/cart", {"product_id": product_id, "quantity": 1})
 
     @task(2)
     def view_cart(self):
+        if not self.is_active:
+            return
         self._log_request("GET", "/cart", None)
 
     @task(1)
     def checkout(self):
+        if not self.is_active:
+            return
         self._log_request("POST", "/checkout", {"payment_method": "credit_card"})
 
     @task(1)
     def login(self):
+        if not self.is_active:
+            return
         self._log_request("POST", "/login", {"username": self.username, "password": self.password})
+
+    @task(2)
+    def search(self):
+        if not self.is_active:
+            return
+        search_terms = ["laptop", "phone", "book", "shirt", "headphones"]
+        query = random.choice(search_terms)
+        self._log_request("GET", f"/search?q={query}", None)
 
     def _log_request(self, method, path, data):
         log_id = str(uuid.uuid4())
@@ -126,3 +172,35 @@ class WebsiteUser(FastHttpUser):
             "request_body": data if data else None
         }
         json_logger.info(json.dumps(log_entry))
+
+
+def manage_user_lifecycle(environment):
+    for user_instance in DynamicWebsiteUser.instances:
+        current_time = time.time()
+        if user_instance.is_active:
+            if random.random() < config['lifecycle']['deactivation_chance']:
+                user_instance.is_active = False
+                user_instance.last_active_time = current_time
+                user_instance.activation_cooldown = random.uniform(config['lifecycle']['min_cooldown'], config['lifecycle']['max_cooldown'])
+                logging.info(f"User {user_instance.user_id} deactivated")
+        elif current_time - user_instance.last_active_time > user_instance.activation_cooldown:
+            if random.random() < config['lifecycle']['activation_chance']:
+                user_instance.is_active = True
+                user_instance.last_active_time = current_time
+                logging.info(f"User {user_instance.user_id} activated")
+
+def log_user_stats(environment):
+    active_users = sum(1 for user in DynamicWebsiteUser.instances if user.is_active)
+    inactive_users = len(DynamicWebsiteUser.instances) - active_users
+    log_message = f"Normal User Statistics: Active: {active_users}, Inactive: {inactive_users}"
+    user_stats_logger.info(log_message)
+
+@events.init.add_listener
+def on_locust_init(environment, **kwargs):
+    gevent.spawn(periodic_tasks, environment)
+
+def periodic_tasks(environment):
+    while True:
+        manage_user_lifecycle(environment)
+        log_user_stats(environment)
+        gevent.sleep(config['lifecycle']['check_interval'])

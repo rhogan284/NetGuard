@@ -6,11 +6,12 @@ import uuid
 import os
 from locust import HttpUser, task, between, events
 from locust.runners import MasterRunner
+from locust.shape import LoadTestShape
 from datetime import datetime
 import gevent
 import yaml
-import secrets
 import urllib.parse
+import secrets
 
 config_path = "/mnt/locust/locust_config.yaml"
 with open(config_path, "r") as config_file:
@@ -24,6 +25,28 @@ with open(logging_config_path, 'rt') as f:
 json_logger = logging.getLogger('json_logger')
 user_stats_logger = logging.getLogger('threat_user_stats')
 
+class UserManager:
+    def __init__(self):
+        self.users = {}
+        self.user_classes = set()
+
+    def add_user(self, user):
+        self.users[user.user_id] = user
+        self.user_classes.add(user.__class__)
+
+    def remove_user(self, user):
+        self.users.pop(user.user_id, None)
+
+    def get_stats(self):
+        stats = {cls: {'spawned': 0, 'active': 0} for cls in self.user_classes}
+        for user in self.users.values():
+            stats[user.__class__]['spawned'] += 1
+            if user.is_active:
+                stats[user.__class__]['active'] += 1
+        return stats
+
+user_manager = UserManager()
+
 class DynamicMaliciousUser(HttpUser):
     wait_time = between(config['threat_users']['wait_time_min'], config['threat_users']['wait_time_max'])
     abstract = True
@@ -35,8 +58,10 @@ class DynamicMaliciousUser(HttpUser):
         self.__class__.instances.append(self)
         self.is_active = False
         self.last_active_time = time.time()
-        self.activation_cooldown = random.uniform(config['lifecycle']['min_cooldown'], config['lifecycle']['max_cooldown'])
+        self.activation_cooldown = random.uniform(config['lifecycle']['min_cooldown'],
+                                                  config['lifecycle']['max_cooldown'])
         self.randomuser()
+        user_manager.add_user(self)
 
     def randomuser(self):
         self.user_id = str(uuid.uuid4())
@@ -68,11 +93,14 @@ class DynamicMaliciousUser(HttpUser):
         self.last_active_time = time.time()
 
     def on_stop(self):
+        user_manager.remove_user(self)
+
+    def on_stop(self):
         self.__class__.instances.remove(self)
 
     
     @task(2)
-    def sql_injection_attempt(self):
+    def sql_injection_attempt(self)
      if not self.is_active:
         return
     # Read payloads from an external file
@@ -81,12 +109,10 @@ class DynamicMaliciousUser(HttpUser):
     payload = random.choice(payloads)
     self._log_request("GET", f"/products?id={payload}", None, "sql_injection")
 
-
     @task(2)
     def xss_attempt(self):
         if not self.is_active:
             return
-        # List of payload files for different XSS attack types
         payload_files = ['stored_xss.txt', 'reflected_xss.txt', 'dom_xss.txt']
 
         selected_file = secrets.choice(payload_files)
@@ -207,8 +233,8 @@ class DynamicMaliciousUser(HttpUser):
     def web_scraping(self):
         if not self.is_active:
             return
-        randomuser = random.randint(1,2)
-        choice = random.randint(1,3)
+        randomuser = random.randint(1, 2)
+        choice = random.randint(1, 3)
         if choice == 1:
             pages = ["/products", "/categories", "/reviews", "/comments", "/carts", "/information", "/aboutus"]
             for page in pages:
@@ -216,7 +242,9 @@ class DynamicMaliciousUser(HttpUser):
                 self._log_request("GET", page, None, "web_scraping")
                 time.sleep(random.uniform(1, 3))  # Simulate browsing time
         elif choice == 2:
-            search_terms = ["laptop", "phone", "book", "shirt", "headphones", "tablet", "watch", "camera", "shoes", "jacket", "backpack", "sunglasses", "speaker", "smartwatch", "keyboard", "mouse", "charger", "t-shirt", "monitor", "desk"]
+            search_terms = ["laptop", "phone", "book", "shirt", "headphones", "tablet", "watch", "camera", "shoes",
+                            "jacket", "backpack", "sunglasses", "speaker", "smartwatch", "keyboard", "mouse", "charger",
+                            "t-shirt", "monitor", "desk"]
             pages = ["/products", "/categories", "/reviews", "/comments", "/information"]
             for term in search_terms:
                 page = random.choice(pages)
@@ -235,7 +263,7 @@ class DynamicMaliciousUser(HttpUser):
     def ddos_simulation(self):
         if not self.is_active:
             return
-        randomuser = random.randint(1,2)
+        randomuser = random.randint(1, 2)
         for _ in range(random.randint(5, 15)):
             # Randomize user_id, session_id, client_ip, and user_agent
             if randomuser == 1:
@@ -244,7 +272,8 @@ class DynamicMaliciousUser(HttpUser):
             actions = [
                 lambda: self._log_request("GET", "/", None, "ddos"),
                 lambda: self._log_request("GET", f"/products/{random.randint(1, 10)}", None, "ddos"),
-                lambda: self._log_request("POST", "/cart", {"product_id": random.randint(1, 10), "quantity": 1}, "ddos"),
+                lambda: self._log_request("POST", "/cart", {"product_id": random.randint(1, 10), "quantity": 1},
+                                          "ddos"),
                 lambda: self._log_request("GET", "/cart", None, "ddos"),
                 lambda: self._log_request("POST", "/checkout", {"payment_method": "credit_card"}, "ddos")
             ]
@@ -307,85 +336,126 @@ class DynamicMaliciousUser(HttpUser):
         }
         json_logger.info(json.dumps(log_entry))
 
-class SQLInjectionUser(DynamicMaliciousUser):
-    weight = 3
-    tasks = [DynamicMaliciousUser.sql_injection_attempt]
+enabled_user_classes = []
 
-class XSSUser(DynamicMaliciousUser):
-    weight = 3
-    tasks = [DynamicMaliciousUser.xss_attempt]
+if config['threat_users'].get('sql_injection', {}).get('enabled', False):
+    class SQLInjectionUser(DynamicMaliciousUser):
+        weight = config['threat_users']['sql_injection'].get('weight', 1)
+        tasks = [DynamicMaliciousUser.sql_injection_attempt]
 
-class PathTraversalUser(DynamicMaliciousUser):
-    weight = 2
-    tasks = [DynamicMaliciousUser.path_traversal_attempt]
 
-class CommandInjectionUser(DynamicMaliciousUser):
-    weight = 2
-    tasks = [DynamicMaliciousUser.command_injection_attempt]
+    enabled_user_classes.append(SQLInjectionUser)
 
-class BruteForceUser(DynamicMaliciousUser):
-    weight = 2
-    tasks = [DynamicMaliciousUser.brute_force_login]
+if config['threat_users'].get('xss', {}).get('enabled', False):
+    class XSSUser(DynamicMaliciousUser):
+        weight = config['threat_users']['xss'].get('weight', 1)
+        tasks = [DynamicMaliciousUser.xss_attempt]
 
-class WebScrapingUser(DynamicMaliciousUser):
-    weight = 2
-    tasks = [DynamicMaliciousUser.web_scraping]
 
-class DDOSUser(DynamicMaliciousUser):
-    weight = 2
-    tasks = [DynamicMaliciousUser.ddos_simulation]
+    enabled_user_classes.append(XSSUser)
+
+if config['threat_users'].get('path_traversal', {}).get('enabled', False):
+    class PathTraversalUser(DynamicMaliciousUser):
+        weight = config['threat_users']['path_traversal'].get('weight', 1)
+        tasks = [DynamicMaliciousUser.path_traversal_attempt]
+
+
+    enabled_user_classes.append(PathTraversalUser)
+
+if config['threat_users'].get('command_injection', {}).get('enabled', False):
+    class CommandInjectionUser(DynamicMaliciousUser):
+        weight = config['threat_users']['command_injection'].get('weight', 1)
+        tasks = [DynamicMaliciousUser.command_injection_attempt]
+
+
+    enabled_user_classes.append(CommandInjectionUser)
+
+if config['threat_users'].get('brute_force', {}).get('enabled', False):
+    class BruteForceUser(DynamicMaliciousUser):
+        weight = config['threat_users']['brute_force'].get('weight', 1)
+        tasks = [DynamicMaliciousUser.brute_force_login]
+
+
+    enabled_user_classes.append(BruteForceUser)
+
+if config['threat_users'].get('web_scraping', {}).get('enabled', False):
+    class WebScrapingUser(DynamicMaliciousUser):
+        weight = config['threat_users']['web_scraping'].get('weight', 1)
+        tasks = [DynamicMaliciousUser.web_scraping]
+
+
+    enabled_user_classes.append(WebScrapingUser)
+
+if config['threat_users'].get('ddos', {}).get('enabled', False):
+    class DDOSUser(DynamicMaliciousUser):
+        weight = config['threat_users']['ddos'].get('weight', 1)
+        tasks = [DynamicMaliciousUser.ddos_simulation]
+
+
+    enabled_user_classes.append(DDOSUser)
+
 
 def manage_user_lifecycle(environment):
-    for user_class in environment.user_classes:
-        for user_instance in user_class.instances:
-            current_time = time.time()
-            if user_instance.is_active:
-                if random.random() < config['lifecycle']['deactivation_chance']:
-                    user_instance.is_active = False
-                    user_instance.last_active_time = current_time
-                    user_instance.activation_cooldown = random.uniform(config['lifecycle']['min_cooldown'], config['lifecycle']['max_cooldown'])
-                    logging.info(f"User {user_instance.user_id} deactivated")
-            elif current_time - user_instance.last_active_time > user_instance.activation_cooldown:
-                if random.random() < config['lifecycle']['activation_chance']:
-                    user_instance.is_active = True
-                    user_instance.last_active_time = current_time
-                    logging.info(f"User {user_instance.user_id} activated")
+    # I hate this code with a passion
+    current_time = time.time()
+    for user in list(user_manager.users.values()):
+        if user.is_active:
+            if random.random() < config['lifecycle']['deactivation_chance']:
+                user.is_active = False
+                user.last_active_time = current_time
+                user.activation_cooldown = random.uniform(config['lifecycle']['min_cooldown'],
+                                                          config['lifecycle']['max_cooldown'])
+                logging.info(f"User {user.user_id} deactivated")
+        elif current_time - user.last_active_time > user.activation_cooldown:
+            if random.random() < config['lifecycle']['activation_chance']:
+                user.is_active = True
+                user.last_active_time = current_time
+                logging.info(f"User {user.user_id} activated")
 
-
-def log_user_stats(environment):
-    stats = {user_class.__name__: {'active': 0, 'inactive': 0} for user_class in environment.user_classes}
-
-    for user_class in environment.user_classes:
-        for user in user_class.instances:
-            if user.is_active:
-                stats[user_class.__name__]['active'] += 1
-            else:
-                stats[user_class.__name__]['inactive'] += 1
-
-    log_message = "Threat User Statistics:\n"
-    for user_type, counts in stats.items():
-        log_message += f"{user_type}: Active: {counts['active']}, Inactive: {counts['inactive']}\n"
-
+def log_user_stats():
+    stats = user_manager.get_stats()
+    log_message = "Threat User Statistics: " + ", ".join([
+        f"{cls.__name__}: Spawned: {data['spawned']}, "
+        f"Active: {data['active']}, "
+        f"Inactive: {data['spawned'] - data['active']}"
+        for cls, data in stats.items()
+    ])
     user_stats_logger.info(log_message)
 
+class CustomLoadShape(LoadTestShape):
+    def __init__(self):
+        super().__init__()
+        self.user_count = config['threat_users'].get('count', int(os.getenv('THREAT_USERS', 2)))
+        self.spawn_rate = config['threat_users'].get('spawn_rate', float(os.getenv('THREAT_SPAWN_RATE', 1)))
+        self.user_classes = enabled_user_classes
+        self.user_counts = self.calculate_user_counts()
+        self.run_time = config.get('run_time', 3600)
+        logging.info(f"CustomLoadShape initialized with user_count: {self.user_count}, spawn_rate: {self.spawn_rate}")
+        logging.info(f"User distribution: {self.user_counts}")
 
-@events.init.add_listener
-def on_locust_init(environment, **kwargs):
-    if not isinstance(environment.runner, MasterRunner):
-        gevent.spawn(periodic_tasks, environment)
-        environment.runner.spawn_users({
-            SQLInjectionUser.__name__: config['threat_users']['count'],
-            XSSUser.__name__: config['threat_users']['count'],
-            PathTraversalUser.__name__: config['threat_users']['count'] // 2,
-            CommandInjectionUser.__name__: config['threat_users']['count'] // 2,
-            BruteForceUser.__name__: config['threat_users']['count'] // 2,
-            WebScrapingUser.__name__: config['threat_users']['count'] // 2,
-            DDOSUser.__name__: config['threat_users']['count'] // 2,
-        })
+    def calculate_user_counts(self):
+        total_weight = sum(user_class.weight for user_class in self.user_classes)
+        return {
+            user_class: max(1, int(self.user_count * user_class.weight / total_weight))
+            for user_class in self.user_classes
+        }
 
+    def tick(self):
+        current_users = sum(len(user_class.instances) for user_class in self.user_classes)
+        if current_users >= self.user_count:
+            return self.user_count, self.spawn_rate
+
+        return current_users + self.spawn_rate, self.spawn_rate
 
 def periodic_tasks(environment):
     while True:
         manage_user_lifecycle(environment)
-        log_user_stats(environment)
-        gevent.sleep(config['lifecycle']['check_interval'])
+        log_user_stats()
+        gevent.sleep(5)  # Log every 5 seconds
+
+@events.init.add_listener
+def on_locust_init(environment, **kwargs):
+    if not isinstance(environment.runner, MasterRunner):
+        logging.info(f"Initializing CustomLoadShape")
+        environment.runner.shape_class = CustomLoadShape()
+        gevent.spawn(periodic_tasks, environment)
