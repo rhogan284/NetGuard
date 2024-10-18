@@ -149,6 +149,20 @@ services:
       - app-network
     restart: unless-stopped
 
+  inteface:
+    build:
+      context: ./interface
+    ports: 
+      - "5123:5123"
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_started
+    networks:
+      - app-network
+    restart: unless-stopped
+
 networks:
   app-network:
     driver: bridge
