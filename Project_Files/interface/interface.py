@@ -52,6 +52,5 @@ def internal_error(error):
     flash('An error occurred. Please try again later.')
     return render_template('error.html'), 500
 
-
 if __name__ == '__main__':
     app.run(port=6000, debug=True)
