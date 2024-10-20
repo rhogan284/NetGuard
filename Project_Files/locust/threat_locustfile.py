@@ -12,6 +12,8 @@ import gevent
 import yaml
 import urllib.parse
 import secrets
+import itertools
+import string
 
 config_path = "/mnt/locust/locust_config.yaml"
 with open(config_path, "r") as config_file:
@@ -144,14 +146,61 @@ class DynamicMaliciousUser(HttpUser):
     def brute_force_login(self):
         if not self.is_active:
             return
-        usernames = ['admin', 'root', 'user', 'test', 'guest', 'applebee', 'ofgirl', 'bigbuffmen', 'alphagamer101',
-                     'donaldtrump']
-        passwords = ['password', '123456', 'admin', 'qwerty', 'letmein', 'nonosquare']
 
-        for username in usernames:
-            for password in passwords:
-                self.randomuser()
-                self._log_request("POST", "/login", {"username": username, "password": password}, "brute_force")
+        usernames = [
+            'admin', 'root', 'user', 'test', 'guest', 'applebee', 'ofgirl', 'bigbuffmen', 
+            'alphagamer101', 'donaldtrump', 'john', 'jane', 'doe', 'michael', 'sarah', 
+            'jessica', 'james', 'brian', 'kim', 'chris', 'ashley', 'david', 'steve', 
+            'paul', 'daniel', 'laura', 'kevin', 'robert', 'emily', 'anthony', 'joseph', 
+            'matthew', 'joshua', 'elizabeth', 'michael123', 'nikki', 'nick', 'samantha', 
+            'alex', 'taylor', 'madison', 'charlie', 'zoe', 'olivia', 'mia', 'harry', 
+            'peter', 'lily', 'lucas', 'jackson', 'victor', 'emma', 'sofia'
+        ]
+
+        passwords = [
+            'password', '123456', 'admin', 'qwerty', 'letmein', 'nonosquare', 
+            '123456789', '12345678', '12345', '1234', '1234567', 'welcome', 
+            'abc123', '111111', '123123', 'sunshine', 'iloveyou', 'admin123', 
+            'football', 'monkey', 'letmein123', 'qwerty123', 'password1', 
+            'password123', '1q2w3e4r', 'qazwsx', 'trustno1', 'dragon', 
+            'pussy', 'baseball', 'master', 'hannah', 'lovers', 'qwertyuiop', 
+            'welcome1', '123321', 'superman', 'jesus', 'abc', 'bunny', 
+            'michael', 'letmein!', 'iloveu', 'happy', 'asdfghjkl', 
+            '000000', 'qwerty!@#', '1qaz2wsx', '123qwe', 'asdf', 'myname', 
+            'summer', 'secret', 'lovely', 'sunshine123', 'password!', 
+            'qwerty1', 'iloveyou123', 'hannahmontana', 'hello', 'charlie', 
+            'monkey123', 'princess', 'flower', 'abcd1234', 'abc123456', 
+            'sweet', 'sarah', 'qwert', 'password1234', 'football123', 
+            'friend', 'helpme', 'freedom', 'winner', 'goodlife', 'x123456', 
+            'xpassword', 'fishing', 'tomorrow', 'nightmare', 'gorgeous'
+        ]
+
+        def dicattack(self):
+            for username in usernames:
+                for password in passwords:
+                    self.randomuser()
+                    self._log_request("POST", "/login", {"username": username, "password": password}, "brute_force")
+                    time.sleep(random.uniform(1, 2))
+
+        def simpleattack(self):
+            characters = string.ascii_letters + string.digits + string.punctuation
+
+            for length in range(7, 13):  # Length from 7 to 12
+                for password_tuple in itertools.product(characters, repeat=length):
+                    password = ''.join(password_tuple)
+                    for username in usernames:
+                        self.randomuser()
+                        self._log_request("POST", "/login", {"username": username, "password": password}, "brute_force")
+                        time.sleep(random.uniform(1, 2))
+        
+        choice = random.randint(1, 3)
+        if choice == 1:
+            dicattack()
+        if choice == 2:
+            dicattack()
+            simpleattack()
+        if choice == 3:
+            simpleattack()
 
     @task(1)
     def path_traversal_attempt(self):
@@ -265,11 +314,12 @@ class DynamicMaliciousUser(HttpUser):
 
             actions = [
                 lambda: self._log_request("GET", "/", None, "ddos"),
-                lambda: self._log_request("GET", f"/products/{random.randint(1, 10)}", None, "ddos"),
-                lambda: self._log_request("POST", "/cart", {"product_id": random.randint(1, 10), "quantity": 1},
-                                          "ddos"),
+                lambda: self._log_request("GET", f"/products/{random.randint(1, 20)}", None, "ddos"),  # Increased product range
+                lambda: self._log_request("POST", "/cart", {"product_id": random.randint(1, 20), "quantity": random.randint(1, 5)}, "ddos"),  # Random quantity
                 lambda: self._log_request("GET", "/cart", None, "ddos"),
-                lambda: self._log_request("POST", "/checkout", {"payment_method": "credit_card"}, "ddos")
+                lambda: self._log_request("POST", "/checkout", {"payment_method": random.choice(["credit_card", "paypal", "bank_transfer"])}, "ddos"),  # Random payment method
+                lambda: self._log_request("DELETE", "/cart", {"product_id": random.randint(1, 20)}, "ddos"),  # Simulate deleting an item
+                lambda: self._log_request("PUT", "/update-cart", {"product_id": random.randint(1, 20), "quantity": random.randint(1, 5)}, "ddos")  # Update cart example
             ]
 
             for _ in range(random.randint(1, 20)):
