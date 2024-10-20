@@ -149,7 +149,7 @@ services:
       - app-network
     restart: unless-stopped
 
-  inteface:
+  interface:
     build:
       context: ./interface
     ports: 

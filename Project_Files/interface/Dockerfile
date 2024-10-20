@@ -3,6 +3,7 @@ WORKDIR /interface
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY interface.py .
+COPY templates ./templates
 ENV REDIS_KEY_PREFIX="threat_responder:"
-CMD ["python", "interface.py"]
 
+CMD ["python", "interface.py"]
