@@ -1,16 +1,18 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 import time
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="templates")
 app.secret_key = 'your_secret_key'
 
 users = {
     'admin': 'password123'
 }
 
+
 @app.route('/')
 def home():
     return redirect(url_for('login'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -31,6 +33,7 @@ def logout():
     flash('You have been logged out.')
     return redirect(url_for('login'))
 
+
 @app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
     if 'username' not in session:
@@ -38,7 +41,7 @@ def dashboard():
         return redirect(url_for('login'))
 
     time_range = 'now-15m'  # Last 15 minutes
-    auto_refresh = '30s'    # Default refresh interval
+    auto_refresh = '30s'  # Default refresh interval
 
     if request.method == 'POST':
         time_range = request.form.get('time_range')
@@ -47,10 +50,12 @@ def dashboard():
     kibana_url = f"http://your_kibana_ip:5601/app/kibana#/dashboard/12345678-1234-1234-1234-123456789abc?embed=true&_g=(time:(from:{time_range},to:now),refreshInterval:(pause:!f,value:{auto_refresh}))"
     return render_template('dashboard.html', kibana_url=kibana_url, time_range=time_range, auto_refresh=auto_refresh)
 
+
 @app.errorhandler(500)
 def internal_error(error):
     flash('An error occurred. Please try again later.')
     return render_template('error.html'), 500
 
+
 if __name__ == '__main__':
-    app.run(host = '0.0.0.0', port=5123, debug=True)
+    app.run(host='0.0.0.0', port=5123, debug=True)
