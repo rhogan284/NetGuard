@@ -3,6 +3,8 @@ import os
 import docker
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 import time
+from elasticsearch import Elasticsearch
+from datetime import datetime, timedelta
 
 app = Flask(__name__, template_folder="templates")
 app.secret_key = 'your_secret_key'
@@ -12,6 +14,7 @@ users = {
 }
 
 docker_client = docker.DockerClient(base_url='unix://var/run/docker.sock')
+es = Elasticsearch([{'host': 'elasticsearch', 'port': 9200}])
 
 def load_config(file_path):
     with open(file_path, 'r') as f:
@@ -112,6 +115,82 @@ def config():
         return redirect(url_for('config'))
 
     return render_template('config.html', locust_config=locust_config, detector_config=detector_config, responder_config=responder_config)
+
+
+@app.route('/logs')
+def logs():
+    if 'username' not in session:
+        flash('Please log in to view logs.')
+        return redirect(url_for('login'))
+
+    index = request.args.get('index', 'normal-logs')
+    search_term = request.args.get('search', '')
+    page = int(request.args.get('page', 1))
+    page_size = 10
+    time_filter = request.args.get('time_filter', '')
+
+    time_value = request.args.get('time_value', '')
+    time_unit = request.args.get('time_unit', 'minutes')
+
+    body = {
+        "query": {
+            "bool": {
+                "must": [
+                    {"multi_match": {"query": search_term, "fields": ["*"]}} if search_term else {"match_all": {}}
+                ]
+            }
+        },
+        "sort": [
+            {"@timestamp": {"order": "desc"}}
+        ],
+        "from": (page - 1) * page_size,
+        "size": page_size
+    }
+
+
+    if time_value and time_unit:
+        time_value = int(time_value)
+        now = datetime.utcnow()
+        if time_unit == 'minutes':
+            time_from = now - timedelta(minutes=time_value)
+        elif time_unit == 'seconds':
+            time_from = now - timedelta(seconds=time_value)
+        else:
+            time_from = now - timedelta(minutes=time_value)
+
+        body['query']['bool']['must'].append({
+            "range": {
+                "@timestamp": {
+                    "gte": time_from.isoformat(),
+                    "lte": now.isoformat()
+                }
+            }
+        })
+
+    result = es.search(index=index, body=body)
+
+    logs = [hit['_source'] for hit in result['hits']['hits']]
+    total_logs = result['hits']['total']['value']
+    total_pages = (total_logs + page_size - 1) // page_size
+
+    return render_template('logs.html',
+                           logs=logs,
+                           index=index,
+                           search_term=search_term,
+                           page=page,
+                           total_pages=total_pages,
+                           time_value=time_value,
+                           time_unit=time_unit)
+@app.route('/log_details/<index>/<log_id>')
+def log_details(index, log_id):
+    if 'username' not in session:
+        flash('Please log in to view log details.')
+        return redirect(url_for('login'))
+
+    result = es.get(index=index, id=log_id)
+    log = result['_source']
+    return render_template('log_details.html', log=log)
+
 
 @app.errorhandler(500)
 def internal_error(error):
