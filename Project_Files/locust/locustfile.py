@@ -6,6 +6,7 @@ import uuid
 import os
 from locust import HttpUser, task, between, events
 from locust.contrib.fasthttp import FastHttpUser
+from locust.shape import LoadTestShape
 from datetime import datetime
 import gevent
 import yaml
@@ -173,6 +174,30 @@ class DynamicWebsiteUser(FastHttpUser):
         }
         json_logger.info(json.dumps(log_entry))
 
+class CustomLoadShape(LoadTestShape):
+    def __init__(self):
+        super().__init__()
+        self.user_count = config['normal_users']['count']
+        self.spawn_rate = config['normal_users']['spawn_rate']
+        self.run_time = config.get('run_time', '1h')
+        logging.info(f"CustomLoadShape initialized with user_count: {self.user_count}, spawn_rate: {self.spawn_rate}")
+
+    def tick(self):
+        run_time = parse_time(self.run_time)
+        if self.get_run_time() < run_time:
+            return self.user_count, self.spawn_rate
+        return None
+
+def parse_time(time_str):
+    if time_str.endswith('h'):
+        return int(time_str[:-1]) * 3600
+    elif time_str.endswith('m'):
+        return int(time_str[:-1]) * 60
+    elif time_str.endswith('s'):
+        return int(time_str[:-1])
+    else:
+        raise ValueError("Invalid time format. Use 'h' for hours, 'm' for minutes, or 's' for seconds.")
+
 
 def manage_user_lifecycle(environment):
     for user_instance in DynamicWebsiteUser.instances:
@@ -195,12 +220,15 @@ def log_user_stats(environment):
     log_message = f"Normal User Statistics: Active: {active_users}, Inactive: {inactive_users}"
     user_stats_logger.info(log_message)
 
-@events.init.add_listener
-def on_locust_init(environment, **kwargs):
-    gevent.spawn(periodic_tasks, environment)
-
 def periodic_tasks(environment):
     while True:
         manage_user_lifecycle(environment)
         log_user_stats(environment)
         gevent.sleep(config['lifecycle']['check_interval'])
+
+@events.init.add_listener
+def on_locust_init(environment, **kwargs):
+    environment.shape_class = CustomLoadShape()
+    gevent.spawn(periodic_tasks, environment)
+
+
