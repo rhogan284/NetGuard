@@ -1,49 +1,40 @@
-# General settings
 host: http://web:5000
-run_time: 1h
-
-# Normal users settings
+lifecycle:
+  activation_chance: 0.3
+  check_interval: 5
+  deactivation_chance: 0.1
+  max_cooldown: 30
+  min_cooldown: 10
+log_dir: /mnt/logs
 normal_users:
   count: 10
   spawn_rate: 1
-  wait_time_min: 1
   wait_time_max: 5
-
-# Threat users settings
-threat_users:
-  count: 10
-  spawn_rate: 1
   wait_time_min: 1
-  wait_time_max: 10
-  sql_injection:
-    enabled: true
-    weight: 3
-  xss:
-    enabled: true
-    weight: 3
-  path_traversal:
-    enabled: true
+run_time: 1h
+threat_users:
+  brute_force:
+    enabled: false
     weight: 2
   command_injection:
     enabled: true
     weight: 2
-  brute_force:
-    enabled: false
-    weight: 2
-  web_scraping:
-    enabled: false
-    weight: 2
+  count: 5
   ddos:
     enabled: false
     weight: 2
-
-# User lifecycle management
-lifecycle:
-  check_interval: 5  # seconds
-  deactivation_chance: 0.1
-  activation_chance: 0.3
-  min_cooldown: 10  # seconds
-  max_cooldown: 30  # seconds
-
-# Logging
-log_dir: /mnt/logs
+  path_traversal:
+    enabled: true
+    weight: 2
+  spawn_rate: 1
+  sql_injection:
+    enabled: true
+    weight: 3
+  wait_time_max: 10
+  wait_time_min: 1
+  web_scraping:
+    enabled: false
+    weight: 2
+  xss:
+    enabled: true
+    weight: 3

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Management</title>
+</head>
+<body>
+    <h1>Configuration Management</h1>
+
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul class="flash-messages">
+                {% for message in messages %}
+                    <li class="flash-message">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
+    <form method="POST">
+        <h2>Locust Configuration</h2>
+        <label for="normal_users_count">Normal Users Count:</label>
+        <input type="number" id="normal_users_count" name="normal_users_count" value="{{ locust_config['normal_users']['count'] }}" required>
+
+        <label for="threat_users_count">Threat Users Count:</label>
+        <input type="number" id="threat_users_count" name="threat_users_count" value="{{ locust_config['threat_users']['count'] }}" required>
+
+        <h2>Threat Detector Configuration</h2>
+        <label for="ddos_threshold">DDoS Threshold:</label>
+        <input type="number" id="ddos_threshold" name="ddos_threshold" value="{{ detector_config['ddos']['threshold'] }}" required>
+
+        <h2>Threat Responder Configuration</h2>
+        <label for="rate_limit_max_requests">Rate Limit Max Requests:</label>
+        <input type="number" id="rate_limit_max_requests" name="rate_limit_max_requests" value="{{ responder_config['rate_limit']['max_requests'] }}" required>
+
+        <button type="submit">Update Configuration</button>
+    </form>
+
+    <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
+    <p><a href="{{ url_for('logout') }}">Logout</a></p>
+</body>
+</html>
