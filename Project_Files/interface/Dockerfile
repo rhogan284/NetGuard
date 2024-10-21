@@ -6,4 +6,6 @@ COPY interface.py .
 COPY templates ./templates
 ENV REDIS_KEY_PREFIX="threat_responder:"
 
+RUN pip install docker PyYAML
+
 CMD ["python", "interface.py"]

@@ -154,6 +154,10 @@ services:
       context: ./interface
     ports: 
       - "5123:5123"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./locust:/mnt/locust
+      - ./threat_detector:/app
     depends_on:
       redis:
         condition: service_healthy
