@@ -1,43 +1,100 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Configuration Management</title>
-</head>
-<body>
-    <h1>Configuration Management</h1>
+{% extends "base.html" %}
 
+{% block title %}Configuration - NetGuard{% endblock %}
+
+{% block header %}Configuration{% endblock %}
+
+{% block content %}
     {% with messages = get_flashed_messages() %}
         {% if messages %}
-            <ul class="flash-messages">
+            <div class="mb-4">
                 {% for message in messages %}
-                    <li class="flash-message">{{ message }}</li>
+                    <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-2">
+                        {{ message }}
+                    </div>
                 {% endfor %}
-            </ul>
+            </div>
         {% endif %}
     {% endwith %}
 
-    <form method="POST">
-        <h2>Locust Configuration</h2>
-        <label for="normal_users_count">Normal Users Count:</label>
-        <input type="number" id="normal_users_count" name="normal_users_count" value="{{ locust_config['normal_users']['count'] }}" required>
+    <form method="POST" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Locust Configuration</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="normal_users_count">
+                        Normal Users Count:
+                    </label>
+                    <input 
+                        type="number" 
+                        id="normal_users_count" 
+                        name="normal_users_count" 
+                        value="{{ locust_config['normal_users']['count'] }}" 
+                        required
+                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    >
+                </div>
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="threat_users_count">
+                        Threat Users Count:
+                    </label>
+                    <input 
+                        type="number" 
+                        id="threat_users_count" 
+                        name="threat_users_count" 
+                        value="{{ locust_config['threat_users']['count'] }}" 
+                        required
+                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    >
+                </div>
+            </div>
+        </div>
 
-        <label for="threat_users_count">Threat Users Count:</label>
-        <input type="number" id="threat_users_count" name="threat_users_count" value="{{ locust_config['threat_users']['count'] }}" required>
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Threat Detector Configuration</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="ddos_threshold">
+                        DDoS Threshold:
+                    </label>
+                    <input 
+                        type="number" 
+                        id="ddos_threshold" 
+                        name="ddos_threshold" 
+                        value="{{ detector_config['ddos']['threshold'] }}" 
+                        required
+                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    >
+                </div>
+            </div>
+        </div>
 
-        <h2>Threat Detector Configuration</h2>
-        <label for="ddos_threshold">DDoS Threshold:</label>
-        <input type="number" id="ddos_threshold" name="ddos_threshold" value="{{ detector_config['ddos']['threshold'] }}" required>
+        <div class="mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Threat Responder Configuration</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-gray-700 text-sm font-bold mb-2" for="rate_limit_max_requests">
+                        Rate Limit Max Requests:
+                    </label>
+                    <input 
+                        type="number" 
+                        id="rate_limit_max_requests" 
+                        name="rate_limit_max_requests" 
+                        value="{{ responder_config['rate_limit']['max_requests'] }}" 
+                        required
+                        class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                    >
+                </div>
+            </div>
+        </div>
 
-        <h2>Threat Responder Configuration</h2>
-        <label for="rate_limit_max_requests">Rate Limit Max Requests:</label>
-        <input type="number" id="rate_limit_max_requests" name="rate_limit_max_requests" value="{{ responder_config['rate_limit']['max_requests'] }}" required>
-
-        <button type="submit">Update Configuration</button>
+        <div>
+            <button 
+                type="submit" 
+                class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            >
+                Update Configuration
+            </button>
+        </div>
     </form>
-
-    <p><a href="{{ url_for('dashboard') }}">Back to Dashboard</a></p>
-    <p><a href="{{ url_for('logout') }}">Logout</a></p>
-</body>
-</html>
+{% endblock %}

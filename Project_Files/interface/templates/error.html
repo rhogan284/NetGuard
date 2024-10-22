@@ -1,13 +1,40 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Error</title>
-</head>
-<body>
-    <h1>Error</h1>
-    <p>Sorry, an error occurred while loading the dashboard.</p>
-    <a href="{{ url_for('dashboard') }}">Go back to Dashboard</a>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Error - NetGuard{% endblock %}
+
+{% block header %}Error{% endblock %}
+
+{% block content %}
+    <div class="flex justify-center">
+        <div class="max-w-md w-full">
+            <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+                <div class="text-center">
+                    <div class="mb-6 text-gray-600">
+                        Sorry, an error occurred while processing your request.
+                    </div>
+
+                    {% with messages = get_flashed_messages() %}
+                        {% if messages %}
+                            <div class="mb-6">
+                                {% for message in messages %}
+                                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-2">
+                                        {{ message }}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                    {% endwith %}
+
+                    <div class="space-y-4">
+                        <a 
+                            href="{{ url_for('dashboard') }}" 
+                            class="block bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                        >
+                            Return to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}
