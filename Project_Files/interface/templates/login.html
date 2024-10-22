@@ -1,21 +1,64 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
-</head>
-<body>
-    <h1>Login</h1>
-    <form method="POST">
-        <label for="username">Username:</label>
-        <input type="text" id="username" name="username" required><br>
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required><br>
-        <button type="submit">Login</button>
-    </form>
-    {% for message in get_flashed_messages() %}
-        <p>{{ message }}</p>
-    {% endfor %}
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Login - NetGuard{% endblock %}
+
+{% block header %}Login{% endblock %}
+
+{% block content %}
+    <div class="flex justify-center">
+        <div class="max-w-md w-full">
+            <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+                {% with messages = get_flashed_messages() %}
+                    {% if messages %}
+                        <div class="mb-4">
+                            {% for message in messages %}
+                                <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-2">
+                                    {{ message }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <form method="POST" class="space-y-6">
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="username">
+                            Username
+                        </label>
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username" 
+                            required
+                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                            placeholder="Enter your username"
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block text-gray-700 text-sm font-bold mb-2" for="password">
+                            Password
+                        </label>
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password" 
+                            required
+                            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                            placeholder="Enter your password"
+                        >
+                    </div>
+                    
+                    <div>
+                        <button 
+                            type="submit" 
+                            class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                        >
+                            Login
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock %}

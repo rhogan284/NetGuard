@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NetGuard{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <header class="bg-white shadow-md mb-6">
+        <div class="container mx-auto px-4">
+            <div class="py-4">
+                <h1 class="text-3xl font-bold text-gray-800">{% block header %}NetGuard{% endblock %}</h1>
+            </div>
+            {% if session.username and request.endpoint != 'login' %}
+            <nav class="border-t border-gray-200">
+                <div class="flex items-center justify-between">
+                    <div class="flex space-x-8">
+                        <a href="{{ url_for('dashboard') }}"
+                           class="py-4 px-2 text-gray-500 font-medium hover:text-blue-500 {% if request.endpoint == 'dashboard' %}text-blue-500 border-b-2 border-blue-500{% endif %}">
+                            Dashboard
+                        </a>
+                        <a href="{{ url_for('logs') }}"
+                           class="py-4 px-2 text-gray-500 font-medium hover:text-blue-500 {% if request.endpoint == 'logs' %}text-blue-500 border-b-2 border-blue-500{% endif %}">
+                            Logs
+                        </a>
+                        <a href="{{ url_for('config') }}"
+                           class="py-4 px-2 text-gray-500 font-medium hover:text-blue-500 {% if request.endpoint == 'config' %}text-blue-500 border-b-2 border-blue-500{% endif %}">
+                            Configuration
+                        </a>
+                    </div>
+                    <div>
+                        <a href="{{ url_for('logout') }}"
+                           class="py-4 px-2 text-red-500 font-medium hover:text-red-700">
+                            Logout
+                        </a>
+                    </div>
+                </div>
+            </nav>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4">
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>
