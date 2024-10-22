@@ -7,7 +7,7 @@ lifecycle:
   min_cooldown: 10
 log_dir: /mnt/logs
 normal_users:
-  count: 10
+  count: 5
   spawn_rate: 1
   wait_time_max: 5
   wait_time_min: 1
