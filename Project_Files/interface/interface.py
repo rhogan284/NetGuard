@@ -1,12 +1,16 @@
-import yaml
-import os
-import docker
-from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
-import time
-from elasticsearch import Elasticsearch
-from datetime import datetime, timedelta
-import urllib.parse
 import json
+import os
+import time
+import urllib.parse
+from datetime import datetime, timedelta
+from functools import wraps
+
+import docker
+import psycopg2
+import psycopg2.extras
+import yaml
+from elasticsearch import Elasticsearch
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 
 app = Flask(__name__, template_folder="templates")
 app.secret_key = 'your_secret_key'
@@ -50,9 +54,69 @@ def restart_container(container_name):
         return False
 
 
+def get_db_connection():
+    return psycopg2.connect(
+        host=os.environ.get('POSTGRES_HOST', 'db'),
+        database=os.environ.get('POSTGRES_DB', 'ecommerce'),
+        user=os.environ.get('POSTGRES_USER', 'user'),
+        password=os.environ.get('POSTGRES_PASSWORD', 'password')
+    )
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            flash('Please log in to access this page.')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
 @app.route('/')
 def home():
+    if 'username' in session:
+        return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
+
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        confirm_password = request.form['confirm_password']
+
+        if password != confirm_password:
+            flash('Passwords do not match.')
+            return render_template('register.html')
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            cur.execute('SELECT id FROM users WHERE username = %s', (username,))
+            if cur.fetchone() is not None:
+                flash('Username already exists.')
+                return render_template('register.html')
+
+            cur.execute(
+                'INSERT INTO users (username, password) VALUES (%s, %s)',
+                (username, password)
+            )
+
+            conn.commit()
+            cur.close()
+            conn.close()
+
+            flash('Registration successful! Please log in.')
+            return redirect(url_for('login'))
+        except Exception as e:
+            flash(f'An error occurred during registration: {str(e)}')
+            return render_template('register.html')
+
+    return render_template('register.html')
 
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -60,12 +124,27 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        if username in users and users[username] == password:
-            session['username'] = username
-            flash('Login successful!')
-            return redirect(url_for('dashboard'))
-        else:
-            flash('Invalid username or password.')
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+            cur.execute('SELECT * FROM users WHERE username = %s AND password = %s',
+                        (username, password))
+            user = cur.fetchone()
+
+            cur.close()
+            conn.close()
+
+            if user:
+                session['username'] = username
+                flash('Login successful!')
+                return redirect(url_for('dashboard'))
+            else:
+                flash('Invalid username or password.')
+        except Exception as e:
+            flash(f'An error occurred during login: {str(e)}')
+
     return render_template('login.html')
 
 
@@ -77,6 +156,7 @@ def logout():
 
 
 @app.route('/dashboard', methods=['GET', 'POST'])
+@login_required
 def dashboard():
     if 'username' not in session:
         flash('Please log in to access the dashboard.')
@@ -94,6 +174,7 @@ def dashboard():
 
 
 @app.route('/config', methods=['GET', 'POST'])
+@login_required
 def config():
     if 'username' not in session:
         flash('Please log in to access the configuration.')
@@ -129,6 +210,7 @@ def config():
 
 
 @app.route('/logs')
+@login_required
 def logs():
     if 'username' not in session:
         flash('Please log in to view logs.')
@@ -194,6 +276,7 @@ def logs():
 
 
 @app.route('/log_details')
+@login_required
 def log_details():
     if 'username' not in session:
         flash('Please log in to view log details.')
