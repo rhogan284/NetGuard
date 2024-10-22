@@ -50,7 +50,7 @@
                     <td class="py-3 px-6 text-left">{{ log.url }}</td>
                     <td class="py-3 px-6 text-left">{{ log.status_code }}</td>
                     <td class="py-3 px-6 text-left">
-                        <a href="{{ url_for('log_details', index=index, log_id=log.log_id) }}" class="text-blue-600 hover:text-blue-900">View Details</a>
+                        <a href="{{ url_for('log_details', log=log|tojson|urlencode) }}" class="text-blue-600 hover:text-blue-900">View Details</a>
                     </td>
                 </tr>
                 {% endfor %}

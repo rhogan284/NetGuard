@@ -5,6 +5,8 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 import time
 from elasticsearch import Elasticsearch
 from datetime import datetime, timedelta
+import urllib.parse
+import json
 
 app = Flask(__name__, template_folder="templates")
 app.secret_key = 'your_secret_key'
@@ -16,13 +18,16 @@ users = {
 docker_client = docker.DockerClient(base_url='unix://var/run/docker.sock')
 es = Elasticsearch([{'host': 'elasticsearch', 'port': 9200}])
 
+
 def load_config(file_path):
     with open(file_path, 'r') as f:
         return yaml.safe_load(f)
 
+
 def save_config(file_path, config):
     with open(file_path, 'w') as f:
         yaml.dump(config, f)
+
 
 def restart_container(container_name):
     try:
@@ -44,9 +49,11 @@ def restart_container(container_name):
         app.logger.error(f"Error restarting container {container_name}: {str(e)}")
         return False
 
+
 @app.route('/')
 def home():
     return redirect(url_for('login'))
+
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -61,11 +68,13 @@ def login():
             flash('Invalid username or password.')
     return render_template('login.html')
 
+
 @app.route('/logout')
 def logout():
     session.pop('username', None)
     flash('You have been logged out.')
     return redirect(url_for('login'))
+
 
 @app.route('/dashboard', methods=['GET', 'POST'])
 def dashboard():
@@ -82,6 +91,7 @@ def dashboard():
 
     kibana_url = f"http://your_kibana_ip:5601/app/kibana#/dashboard/12345678-1234-1234-1234-123456789abc?embed=true&_g=(time:(from:{time_range},to:now),refreshInterval:(pause:!f,value:{auto_refresh}))"
     return render_template('dashboard.html', kibana_url=kibana_url, time_range=time_range, auto_refresh=auto_refresh)
+
 
 @app.route('/config', methods=['GET', 'POST'])
 def config():
@@ -114,7 +124,8 @@ def config():
             flash(f'Error updating configuration: {str(e)}')
         return redirect(url_for('config'))
 
-    return render_template('config.html', locust_config=locust_config, detector_config=detector_config, responder_config=responder_config)
+    return render_template('config.html', locust_config=locust_config, detector_config=detector_config,
+                           responder_config=responder_config)
 
 
 @app.route('/logs')
@@ -146,7 +157,6 @@ def logs():
         "from": (page - 1) * page_size,
         "size": page_size
     }
-
 
     if time_value and time_unit:
         time_value = int(time_value)
@@ -181,14 +191,25 @@ def logs():
                            total_pages=total_pages,
                            time_value=time_value,
                            time_unit=time_unit)
-@app.route('/log_details/<index>/<log_id>')
-def log_details(index, log_id):
+
+
+@app.route('/log_details')
+def log_details():
     if 'username' not in session:
         flash('Please log in to view log details.')
         return redirect(url_for('login'))
 
-    result = es.get(index=index, id=log_id)
-    log = result['_source']
+    log_data = request.args.get('log')
+    if not log_data:
+        flash('No log data provided.')
+        return redirect(url_for('logs'))
+
+    try:
+        log = json.loads(urllib.parse.unquote(log_data))
+    except json.JSONDecodeError:
+        flash('Invalid log data.')
+        return redirect(url_for('logs'))
+
     return render_template('log_details.html', log=log)
 
 
@@ -196,6 +217,7 @@ def log_details(index, log_id):
 def internal_error(error):
     flash('An error occurred. Please try again later.')
     return render_template('error.html'), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5123, debug=True)
