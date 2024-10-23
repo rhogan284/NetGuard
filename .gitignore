@@ -7,6 +7,7 @@
 /Project_Files/logs/threat_responder.log
 /Project_Files/logs/normal_user_stats.log
 .idea
+.DS_Store
 
 
 /Project_Files/logs/threat_user_stats.log
