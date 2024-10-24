@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}Log Details - NetGuard{% endblock %}
+
+{% block header %}Log Details{% endblock %}
+
+{% block content %}
+    <div class="mb-4">
+        <a href="{{ url_for('logs') }}" 
+           class="text-blue-600 hover:text-blue-900 flex items-center">
+            <span class="mr-1">←</span> Back to Logs
+        </a>
+    </div>
+
+    <div class="bg-white shadow-md rounded p-6">
+        {% for key, value in log.items() %}
+            <div class="mb-4">
+                <h3 class="text-sm font-bold text-gray-700 mb-1">{{ key }}</h3>
+                <div class="text-gray-600 bg-gray-50 rounded p-2">
+                    {% if value is mapping %}
+                        <pre class="whitespace-pre-wrap">{{ value | tojson(indent=2) }}</pre>
+                    {% else %}
+                        {{ value }}
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% endblock %}
