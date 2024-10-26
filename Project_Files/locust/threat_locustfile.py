@@ -175,32 +175,23 @@ class DynamicMaliciousUser(HttpUser):
             'xpassword', 'fishing', 'tomorrow', 'nightmare', 'gorgeous'
         ]
 
-        def dicattack(self):
+        choice = random.randint(1, 3)
+        if choice == 1:
             for username in usernames:
                 for password in passwords:
                     self.randomuser()
                     self._log_request("POST", "/login", {"username": username, "password": password}, "brute_force")
                     time.sleep(random.uniform(1, 2))
 
-        def simpleattack(self):
+        if choice == 2:
             characters = string.ascii_letters + string.digits + string.punctuation
-
-            for length in range(7, 13):  # Length from 7 to 12
+            for length in range(7, 13):  # Password length from 7 to 12
                 for password_tuple in itertools.product(characters, repeat=length):
                     password = ''.join(password_tuple)
                     for username in usernames:
                         self.randomuser()
                         self._log_request("POST", "/login", {"username": username, "password": password}, "brute_force")
                         time.sleep(random.uniform(1, 2))
-        
-        choice = random.randint(1, 3)
-        if choice == 1:
-            dicattack()
-        if choice == 2:
-            dicattack()
-            simpleattack()
-        if choice == 3:
-            simpleattack()
 
     @task(1)
     def path_traversal_attempt(self):
