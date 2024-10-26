@@ -19,7 +19,7 @@ services:
       - app-network
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.14.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.16.2
     environment:
       - discovery.type=single-node
       - logger.level=WARN
@@ -34,7 +34,7 @@ services:
       retries: 5
 
   logstash:
-    image: docker.elastic.co/logstash/logstash:7.14.0
+    image: docker.elastic.co/logstash/logstash:7.16.2
     volumes:
       - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
       - ./logstash/logstash.yaml:/usr/share/logstash/config/logstash.yaml
@@ -47,7 +47,7 @@ services:
       - app-network
 
   kibana:
-    image: docker.elastic.co/kibana/kibana:7.14.0
+    image: docker.elastic.co/kibana/kibana:7.16.2
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - LOGGING_ROOT_LEVEL=warn

@@ -161,16 +161,7 @@ def dashboard():
     if 'username' not in session:
         flash('Please log in to access the dashboard.')
         return redirect(url_for('login'))
-
-    time_range = 'now-15m'
-    auto_refresh = '30s'
-
-    if request.method == 'POST':
-        time_range = request.form.get('time_range')
-        auto_refresh = request.form.get('auto_refresh')
-
-    kibana_url = f"http://your_kibana_ip:5601/app/kibana#/dashboard/12345678-1234-1234-1234-123456789abc?embed=true&_g=(time:(from:{time_range},to:now),refreshInterval:(pause:!f,value:{auto_refresh}))"
-    return render_template('dashboard.html', kibana_url=kibana_url, time_range=time_range, auto_refresh=auto_refresh)
+    return render_template('dashboard.html')
 
 
 @app.route('/config', methods=['GET', 'POST'])
