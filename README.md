@@ -7,50 +7,34 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
 ```
 .
 ├── db/
-│   └── init.sql
 ├── interface/
-│   ├── templates/
-│   │   ├── dashboard.html
-│   │   ├── error.html
-│   │   └── login.html
-│   └── interface.py
 ├── locust/
-│   ├── Dockerfile.locust
-│   ├── locust_config.yaml
-│   ├── locustfile.py
-│   ├── logging_config.yaml
-│   └── threat_locustfile.py
 ├── logstash/
-│   ├── logstash.conf
-│   └── logstash.yaml
 ├── threat_detector/
-│   ├── detector_config.yaml
-│   ├── Dockerfile.detector
-│   ├── Dockerfile.responder
-│   ├── requirements.txt
-│   ├── responder_config.yaml
-│   ├── threat_detector.py
-│   └── threat_responder.py
 ├── web/
-│   ├── app.py
-│   ├── Dockerfile
-│   └── requirements.txt
 └── docker-compose.yml
 ```
 
 ## Components
 
-1. **Web Application**: A Flask-based e-commerce API simulating basic operations.
-2. **Database**: PostgreSQL database storing product information.
-3. **Redis**: Used for caching and managing blocked IP addresses.
-4. **Load Testing**: Two Locust instances simulating normal user traffic and potential security threats.
+1. **Web Application**: A Flask-based e-commerce API simulating basic operations, including product management, cart operations, and user authentication.
+2. **Database**: PostgreSQL database storing product and user information with secure password storage.
+3. **Redis**: Used for caching, managing blocked IP addresses, and rate limiting.
+4. **Load Testing**: 
+   - Normal traffic Locust instance with configurable user behavior patterns
+   - Threat simulation Locust instance with various attack patterns including SQL injection, XSS, path traversal, and DDoS
 5. **ELK Stack**: 
    - Elasticsearch for storing and indexing logs
-   - Logstash for log processing and ingestion
-   - Kibana for log visualization and analysis
-6. **Threat Detector**: A Python-based service that analyzes logs in real-time to detect potential security threats.
-7. **Threat Responder**: A Python-based service that automatically responds to detected threats.
-8. **Interface**: A Flask-based web interface for viewing the Kibana dashboard and managing the system.
+   - Logstash for log processing with separate normal and threat log streams
+   - Kibana for log visualization and analysis with preconfigured dashboards
+6. **Threat Detector**: Real-time log analysis with configurable detection rules for various attack patterns.
+7. **Threat Responder**: Automated response system with configurable actions including IP blocking, rate limiting, and threat logging.
+8. **Interface**: A comprehensive web interface featuring:
+   - User authentication and registration
+   - Real-time monitoring dashboard
+   - Configuration management for all components
+   - Detailed log viewing and filtering
+   - Threat analysis and response monitoring
 
 ## Setup and Running
 
@@ -72,48 +56,66 @@ NetGuard is a comprehensive e-commerce platform simulation with integrated loggi
    - Kibana: http://localhost:5601
    - Locust (normal traffic): http://localhost:8089
    - Locust (threat simulation): Running in headless mode
-   - Interface: http://localhost:5000 (assuming the interface runs on port 5000)
+   - Interface: http://localhost:5123
 
 ## Usage
 
 1. **Web Application**: 
-   - The Flask app provides basic e-commerce endpoints like product listing, cart management, and checkout.
+   - RESTful API endpoints for product listing, cart management, and checkout
+   - User authentication and session management
+   - Rate limiting and IP blocking protection
 
 2. **Load Testing**:
-   - Normal traffic simulation: Use the Locust web interface at http://localhost:8089 to start and manage load tests.
-   - Threat simulation: This runs automatically in headless mode, simulating various types of attacks.
+   - Normal traffic simulation with configurable user counts and behavior patterns
+   - Comprehensive threat simulation including:
+     - SQL injection attempts
+     - Cross-site scripting (XSS)
+     - Path traversal attacks
+     - Command injection
+     - Brute force attempts
+     - Web scraping
+     - DDoS attacks
 
 3. **Log Analysis**:
    - Access Kibana at http://localhost:5601
-   - Set up index patterns for "locust-logs-*", "threat-logs", and "normal-logs"
-   - Create visualizations and dashboards to analyze the simulated traffic and potential security threats
+   - Preconfigured index patterns for different log types
+   - Real-time log streaming and analysis
+   - Advanced search and filtering capabilities
+   - Custom visualization options
 
 4. **Threat Detection**:
-   - The threat detector service continuously analyzes logs from Elasticsearch
-   - Detected threats are logged to `/mnt/logs/detected_threats.log` and indexed in Elasticsearch
-   - Configure detection rules and thresholds in `threat_detector/detector_config.yaml`
+   - Pattern-based threat detection using regular expressions
+   - Rate-based attack detection (DDoS, brute force)
+   - Configurable detection rules and thresholds
+   - Real-time threat analysis and logging
 
 5. **Threat Response**:
-   - The threat responder service automatically takes action based on detected threats
-   - Actions include blocking IPs, rate limiting, and logging
-   - Configure response actions in `threat_detector/responder_config.yaml`
+   - Automated response actions based on threat type
+   - IP blocking with configurable duration
+   - Rate limiting with adjustable thresholds
+   - Detailed threat logging and analysis
+   - Redis-based blocked IP management
 
 6. **Interface**:
-   - Access the web interface at http://localhost:5000
-   - Log in using the credentials specified in the `interface.py` file
-   - View the Kibana dashboard and manage system settings
+   - Secure user authentication and registration
+   - Real-time monitoring dashboard
+   - Detailed log viewing with filtering and search
+   - Configuration management for all components
+   - System health monitoring
 
 ## Monitoring and Logging
 
-- All logs are centralized in Elasticsearch
-- Kibana provides real-time visualizations and dashboards
-- The Threat Detector continuously monitors for suspicious activities
-- The Threat Responder takes automated actions to mitigate detected threats
-- The Interface provides a user-friendly way to view and manage the system
+- Centralized logging in Elasticsearch with separate indices for normal and threat logs
+- Real-time log processing through Logstash
+- Comprehensive Kibana dashboards for system monitoring
+- Detailed threat detection and response logging
+- User-friendly interface for log analysis and system management
 
 ## Customisation
 
 - Modify `threat_detector/detector_config.yaml` to adjust threat detection rules and thresholds
 - Update `threat_detector/responder_config.yaml` to customize automated response actions
-- Edit `locust/threat_locustfile.py` to simulate different types of attacks
-- Customize the interface by modifying the templates in `interface/templates/`
+- Edit `locust/locust_config.yaml` to adjust load testing parameters
+- Customize attack patterns in `locust/payloads/` directory
+- Modify interface templates in `interface/templates/` for UI customization
+- Adjust logging configuration in `logstash/logstash.conf` and `logging_config.yaml`
