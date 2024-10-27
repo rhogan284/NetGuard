@@ -1,11 +1,11 @@
+import glob
 import json
 import os
 import time
 import urllib.parse
+from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import wraps
-from collections import defaultdict
-import glob
 
 import docker
 import psycopg2
@@ -38,21 +38,21 @@ def save_config(file_path, config):
 def restart_container(container_name):
     try:
         container = docker_client.containers.get(container_name)
-        app.app.logger.info(f"Restarting container: {container.name} (ID: {container.id})")
+        app.logger.info(f"Restarting container: {container.name} (ID: {container.id})")
         container.restart()
         for i in range(30):
             container.reload()
             if container.status == 'running':
-                app.app.logger.info(
+                app.logger.info(
                     f"Container {container_name} successfully restarted. Current status: {container.status}")
                 return True
             time.sleep(1)
 
     except docker.errors.NotFound:
-        app.app.logger.error(f"Container {container_name} not found")
+        app.logger.error(f"Container {container_name} not found")
         return False
     except Exception as e:
-        app.app.logger.error(f"Error restarting container {container_name}: {str(e)}")
+        app.logger.error(f"Error restarting container {container_name}: {str(e)}")
         return False
 
 
@@ -74,6 +74,128 @@ def login_required(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+
+def calculate_metrics():
+    try:
+        app.logger.info("Starting metrics calculation")
+
+        metrics = {
+            'current_latency': 0,
+            'detection_rate': 0,
+            'total_requests': 0,
+            'threats_detected': 0,
+            'latency_history': [],
+            'detection_history': []
+        }
+
+        log_files = glob.glob('/mnt/logs/*_json.log')
+        app.logger.info(f"Found log files: {log_files}")
+
+        logs = []
+        for log_file in log_files:
+            try:
+                with open(log_file, 'r') as f:
+                    file_logs = [json.loads(line) for line in f if line.strip()]
+                    app.logger.info(f"Read {len(file_logs)} logs from {log_file}")
+                    logs.extend(file_logs)
+            except Exception as e:
+                app.logger.error(f"Error reading log file {log_file}: {e}")
+
+        if not logs:
+            app.logger.warning("No logs found")
+            return metrics
+
+        app.logger.info(f"Total logs collected: {len(logs)}")
+
+        now = datetime.utcnow()
+        one_minute_ago = now - timedelta(minutes=1)
+
+        recent_logs = []
+        for log in logs:
+            try:
+                timestamp_str = log['@timestamp']
+                if 'Z' in timestamp_str:
+                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
+                else:
+                    timestamp = datetime.fromisoformat(timestamp_str)
+
+                if timestamp >= one_minute_ago:
+                    recent_logs.append((timestamp, log))
+            except Exception as e:
+                app.logger.error(f"Error parsing timestamp: {e}")
+                continue
+
+        app.logger.info(f"Recent logs (last minute): {len(recent_logs)}")
+
+        if not recent_logs:
+            return metrics
+
+        five_seconds_ago = now - timedelta(seconds=5)
+        current_logs = [
+            log for timestamp, log in recent_logs
+            if timestamp >= five_seconds_ago
+        ]
+
+        app.logger.info(f"Logs in last 5 seconds: {len(current_logs)}")
+
+        if current_logs:
+            metrics['current_latency'] = round(
+                sum(log.get('response_time_ms', 0) for log in current_logs) / len(current_logs)
+            )
+            metrics['total_requests'] = len(current_logs)
+            metrics['threats_detected'] = sum(1 for log in current_logs if log.get('threat_type'))
+            metrics['detection_rate'] = round(
+                (metrics['threats_detected'] / metrics['total_requests']) * 100, 1
+            ) if metrics['total_requests'] > 0 else 0
+
+        time_slots = defaultdict(lambda: {'latencies': [], 'threats': 0, 'total': 0})
+
+        for i in range(12):
+            slot_time = now - timedelta(seconds=i * 5)
+            slot_time = slot_time.replace(microsecond=0)
+            slot_time = slot_time.replace(second=(slot_time.second // 5) * 5)
+            time_slots[slot_time] = {'latencies': [], 'threats': 0, 'total': 0}
+
+        for timestamp, log in recent_logs:
+            try:
+                slot_time = timestamp.replace(microsecond=0)
+                slot_time = slot_time.replace(second=(slot_time.second // 5) * 5)
+
+                if slot_time in time_slots:
+                    time_slots[slot_time]['latencies'].append(log.get('response_time_ms', 0))
+                    time_slots[slot_time]['total'] += 1
+                    if log.get('threat_type'):
+                        time_slots[slot_time]['threats'] += 1
+            except Exception as e:
+                app.logger.error(f"Error processing log for time slots: {e}")
+                continue
+
+        history_points = []
+        for slot_time in sorted(time_slots.keys(), reverse=True):
+            slot_data = time_slots[slot_time]
+            avg_latency = round(sum(slot_data['latencies']) / len(slot_data['latencies'])) if slot_data[
+                'latencies'] else 0
+            detection_rate = round((slot_data['threats'] / slot_data['total']) * 100, 1) if slot_data[
+                                                                                                'total'] > 0 else 0
+
+            history_points.append({
+                'time': slot_time.strftime('%H:%M:%S'),
+                'latency': avg_latency,
+                'detection_rate': detection_rate
+            })
+
+        history_points.reverse()
+
+        metrics['latency_history'] = history_points
+        metrics['detection_history'] = history_points
+
+        # app.logger.info(f"Final metrics calculated: {json.dumps(metrics, indent=2)}")
+        return metrics
+
+    except Exception as e:
+        app.logger.error(f"Error calculating metrics: {e}")
+        return None
 
 
 @app.route('/')
@@ -213,6 +335,7 @@ def config():
                            detector_config=detector_config,
                            responder_config=responder_config)
 
+
 @app.route('/logs')
 @login_required
 def logs():
@@ -300,128 +423,6 @@ def log_details():
     return render_template('log_details.html', log=log)
 
 
-def calculate_metrics():
-    try:
-        app.logger.info("Starting metrics calculation")
-
-        metrics = {
-            'current_latency': 0,
-            'detection_rate': 0,
-            'total_requests': 0,
-            'threats_detected': 0,
-            'latency_history': [],
-            'detection_history': []
-        }
-
-        log_files = glob.glob('/mnt/logs/*_json.log')
-        app.logger.info(f"Found log files: {log_files}")
-
-        logs = []
-        for log_file in log_files:
-            try:
-                with open(log_file, 'r') as f:
-                    file_logs = [json.loads(line) for line in f if line.strip()]
-                    app.logger.info(f"Read {len(file_logs)} logs from {log_file}")
-                    logs.extend(file_logs)
-            except Exception as e:
-                app.logger.error(f"Error reading log file {log_file}: {e}")
-
-        if not logs:
-            app.logger.warning("No logs found")
-            return metrics
-
-        app.logger.info(f"Total logs collected: {len(logs)}")
-
-        now = datetime.utcnow()
-        one_minute_ago = now - timedelta(minutes=1)
-
-        recent_logs = []
-        for log in logs:
-            try:
-                timestamp_str = log['@timestamp']
-                if 'Z' in timestamp_str:
-                    timestamp = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
-                else:
-                    timestamp = datetime.fromisoformat(timestamp_str)
-
-                if timestamp >= one_minute_ago:
-                    recent_logs.append((timestamp, log))
-            except Exception as e:
-                app.logger.error(f"Error parsing timestamp: {e}")
-                continue
-
-        app.logger.info(f"Recent logs (last minute): {len(recent_logs)}")
-
-        if not recent_logs:
-            return metrics
-
-        five_seconds_ago = now - timedelta(seconds=5)
-        current_logs = [
-            log for timestamp, log in recent_logs
-            if timestamp >= five_seconds_ago
-        ]
-
-        app.logger.info(f"Logs in last 5 seconds: {len(current_logs)}")
-
-        if current_logs:
-            metrics['current_latency'] = round(
-                sum(log.get('response_time_ms', 0) for log in current_logs) / len(current_logs)
-            )
-            metrics['total_requests'] = len(current_logs)
-            metrics['threats_detected'] = sum(1 for log in current_logs if log.get('threat_type'))
-            metrics['detection_rate'] = round(
-                (metrics['threats_detected'] / metrics['total_requests']) * 100, 1
-            ) if metrics['total_requests'] > 0 else 0
-
-        time_slots = defaultdict(lambda: {'latencies': [], 'threats': 0, 'total': 0})
-
-        for i in range(12):
-            slot_time = now - timedelta(seconds=i * 5)
-            slot_time = slot_time.replace(microsecond=0)
-            slot_time = slot_time.replace(second=(slot_time.second // 5) * 5)
-            time_slots[slot_time] = {'latencies': [], 'threats': 0, 'total': 0}
-
-        for timestamp, log in recent_logs:
-            try:
-                slot_time = timestamp.replace(microsecond=0)
-                slot_time = slot_time.replace(second=(slot_time.second // 5) * 5)
-
-                if slot_time in time_slots:
-                    time_slots[slot_time]['latencies'].append(log.get('response_time_ms', 0))
-                    time_slots[slot_time]['total'] += 1
-                    if log.get('threat_type'):
-                        time_slots[slot_time]['threats'] += 1
-            except Exception as e:
-                app.logger.error(f"Error processing log for time slots: {e}")
-                continue
-
-        history_points = []
-        for slot_time in sorted(time_slots.keys(), reverse=True):
-            slot_data = time_slots[slot_time]
-            avg_latency = round(sum(slot_data['latencies']) / len(slot_data['latencies'])) if slot_data[
-                'latencies'] else 0
-            detection_rate = round((slot_data['threats'] / slot_data['total']) * 100, 1) if slot_data[
-                                                                                                'total'] > 0 else 0
-
-            history_points.append({
-                'time': slot_time.strftime('%H:%M:%S'),
-                'latency': avg_latency,
-                'detection_rate': detection_rate
-            })
-
-        history_points.reverse()
-
-        metrics['latency_history'] = history_points
-        metrics['detection_history'] = history_points
-
-        # app.logger.info(f"Final metrics calculated: {json.dumps(metrics, indent=2)}")
-        return metrics
-
-    except Exception as e:
-        app.logger.error(f"Error calculating metrics: {e}")
-        return None
-
-
 @app.route('/metrics')
 @login_required
 def get_metrics():
@@ -429,6 +430,7 @@ def get_metrics():
     if metrics is None:
         return jsonify({'error': 'Failed to calculate metrics'}), 500
     return jsonify(metrics)
+
 
 @app.errorhandler(500)
 def internal_error(error):
