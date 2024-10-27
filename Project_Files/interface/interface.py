@@ -179,6 +179,16 @@ def config():
         try:
             locust_config['normal_users']['count'] = int(request.form.get('normal_users_count'))
             locust_config['threat_users']['count'] = int(request.form.get('threat_users_count'))
+
+            threat_types = [
+                'sql_injection', 'xss', 'path_traversal', 'command_injection',
+                'brute_force', 'web_scraping', 'ddos'
+            ]
+
+            for threat_type in threat_types:
+                enabled_key = f'{threat_type}_enabled'
+                locust_config['threat_users'][threat_type]['enabled'] = request.form.get(enabled_key) is not None
+
             detector_config['ddos']['threshold'] = int(request.form.get('ddos_threshold'))
             responder_config['rate_limit']['max_requests'] = int(request.form.get('rate_limit_max_requests'))
 
@@ -196,9 +206,10 @@ def config():
             flash(f'Error updating configuration: {str(e)}')
         return redirect(url_for('config'))
 
-    return render_template('config.html', locust_config=locust_config, detector_config=detector_config,
+    return render_template('config.html',
+                           locust_config=locust_config,
+                           detector_config=detector_config,
                            responder_config=responder_config)
-
 
 @app.route('/logs')
 @login_required

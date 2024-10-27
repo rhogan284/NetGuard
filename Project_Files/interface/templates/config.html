@@ -51,6 +51,89 @@
         </div>
 
         <div class="mb-6">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">Threat Types Configuration</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="flex items-center space-x-3">
+                        <input
+                            type="checkbox"
+                            name="sql_injection_enabled"
+                            {% if locust_config['threat_users']['sql_injection']['enabled'] %}checked{% endif %}
+                            class="form-checkbox h-5 w-5 text-blue-600"
+                        >
+                        <span class="text-gray-700">SQL Injection</span>
+                    </label>
+                </div>
+                <div>
+                    <label class="flex items-center space-x-3">
+                        <input
+                            type="checkbox"
+                            name="xss_enabled"
+                            {% if locust_config['threat_users']['xss']['enabled'] %}checked{% endif %}
+                            class="form-checkbox h-5 w-5 text-blue-600"
+                        >
+                        <span class="text-gray-700">XSS</span>
+                    </label>
+                </div>
+                <div>
+                    <label class="flex items-center space-x-3">
+                        <input
+                            type="checkbox"
+                            name="path_traversal_enabled"
+                            {% if locust_config['threat_users']['path_traversal']['enabled'] %}checked{% endif %}
+                            class="form-checkbox h-5 w-5 text-blue-600"
+                        >
+                        <span class="text-gray-700">Path Traversal</span>
+                    </label>
+                </div>
+                <div>
+                    <label class="flex items-center space-x-3">
+                        <input
+                            type="checkbox"
+                            name="command_injection_enabled"
+                            {% if locust_config['threat_users']['command_injection']['enabled'] %}checked{% endif %}
+                            class="form-checkbox h-5 w-5 text-blue-600"
+                        >
+                        <span class="text-gray-700">Command Injection</span>
+                    </label>
+                </div>
+                <div>
+                    <label class="flex items-center space-x-3">
+                        <input
+                            type="checkbox"
+                            name="brute_force_enabled"
+                            {% if locust_config['threat_users']['brute_force']['enabled'] %}checked{% endif %}
+                            class="form-checkbox h-5 w-5 text-blue-600"
+                        >
+                        <span class="text-gray-700">Brute Force</span>
+                    </label>
+                </div>
+                <div>
+                    <label class="flex items-center space-x-3">
+                        <input
+                            type="checkbox"
+                            name="web_scraping_enabled"
+                            {% if locust_config['threat_users']['web_scraping']['enabled'] %}checked{% endif %}
+                            class="form-checkbox h-5 w-5 text-blue-600"
+                        >
+                        <span class="text-gray-700">Web Scraping</span>
+                    </label>
+                </div>
+                <div>
+                    <label class="flex items-center space-x-3">
+                        <input
+                            type="checkbox"
+                            name="ddos_enabled"
+                            {% if locust_config['threat_users']['ddos']['enabled'] %}checked{% endif %}
+                            class="form-checkbox h-5 w-5 text-blue-600"
+                        >
+                        <span class="text-gray-700">DDoS</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-6">
             <h2 class="text-xl font-semibold mb-4 text-gray-700">Threat Detector Configuration</h2>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
