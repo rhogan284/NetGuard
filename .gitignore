@@ -6,8 +6,10 @@
 /Project_Files/logs/threat_locust_json.log
 /Project_Files/logs/threat_responder.log
 /Project_Files/logs/normal_user_stats.log
+/Project_Files/locust/__pycache__/
 .idea
 .DS_Store
+repopack-output.txt
 
 
 /Project_Files/logs/threat_user_stats.log
