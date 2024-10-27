@@ -17,9 +17,151 @@
         {% endif %}
     {% endwith %}
 
+    <div class="mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Latency Card -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-medium text-gray-700">Average Latency (last 5s)</h3>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                    </svg>
+                </div>
+                <div class="text-2xl font-bold mb-2" id="current-latency">...</div>
+                <div class="text-sm text-gray-500 mb-4">1 minute history (5s intervals)</div>
+                <div class="relative h-36">
+                    <canvas id="latency-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Detection Rate Card -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-sm font-medium text-gray-700">Threat Detection Rate (last 5s)</h3>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                </div>
+                <div class="text-2xl font-bold mb-2" id="detection-rate">...</div>
+                <div class="text-sm text-gray-500 mb-4">1 minute history (5s intervals)</div>
+                <div class="relative h-36">
+                    <canvas id="detection-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
         <iframe src="http://localhost:5601/app/dashboards#/view/654d70a0-91a5-11ef-8caf-4da1f7744165?embed=true&_g=(filters%3A!()%2CrefreshInterval%3A(pause%3A!t%2Cvalue%3A0)%2Ctime%3A(from%3Anow-15m%2Cto%3Anow))&show-query-input=true&show-time-filter=true&hide-filter-bar=true"
                 style="position: relative; height: 600px; width: 100%;">
         </iframe>
     </div>
+
+    <!-- Add Charts.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        let latencyChart = null;
+        let detectionChart = null;
+
+        function createChart(ctx, label, borderColor) {
+            return new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: label,
+                        data: [],
+                        borderColor: borderColor,
+                        tension: 0.4,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 0
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return label === 'Latency' ? value + 'ms' : value + '%';
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateMetrics() {
+            fetch('/metrics')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Received metrics:', data);
+
+                    document.getElementById('current-latency').textContent = data.current_latency + 'ms';
+                    document.getElementById('detection-rate').textContent = data.detection_rate + '%';
+
+                    const times = data.latency_history.map(point => point.time);
+                    const latencies = data.latency_history.map(point => point.latency);
+                    const detectionRates = data.detection_history.map(point => point.detection_rate);
+
+                    console.log('Chart data:', { times, latencies, detectionRates });
+
+                    if (!latencyChart) {
+                        const latencyCtx = document.getElementById('latency-chart');
+                        if (latencyCtx) {
+                            console.log('Creating latency chart...');
+                            latencyChart = createChart(latencyCtx, 'Latency', '#2563eb');
+                        } else {
+                            console.error('Latency chart canvas not found');
+                        }
+                    }
+
+                    if (!detectionChart) {
+                        const detectionCtx = document.getElementById('detection-chart');
+                        if (detectionCtx) {
+                            console.log('Creating detection chart...');
+                            detectionChart = createChart(detectionCtx, 'Detection Rate', '#dc2626');
+                        } else {
+                            console.error('Detection chart canvas not found');
+                        }
+                    }
+
+                    if (latencyChart) {
+                        latencyChart.data.labels = times;
+                        latencyChart.data.datasets[0].data = latencies;
+                        latencyChart.update('none');
+                    }
+
+                    if (detectionChart) {
+                        detectionChart.data.labels = times;
+                        detectionChart.data.datasets[0].data = detectionRates;
+                        detectionChart.update('none');
+                    }
+                })
+                .catch(error => console.error('Error fetching metrics:', error));
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            updateMetrics();
+
+            setInterval(updateMetrics, 5000);
+        });
+    </script>
 {% endblock %}
